@@ -1,13 +1,112 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowRight, Calendar, User, Clock, X, Share2, ChevronLeft, Newspaper, Quote, ChevronRight } from 'lucide-react';
+import { ArrowRight, Calendar, User, Clock, X, Share2, ChevronLeft, Newspaper, Quote, ChevronRight, Facebook, Twitter, ExternalLink } from 'lucide-react';
 import { motion, useAnimation } from 'motion/react';
 import { Article } from '../types';
+import { SOCIAL_POSTS, SocialPost } from '../data/socialPosts';
 
 interface ArticlesPageProps {
     onBack: () => void;
     articles: Article[];
 }
+
+const SocialPostArticle: React.FC<{ post: SocialPost; reverse?: boolean }> = ({ post, reverse }) => {
+    const isTwitter = post.type === 'twitter';
+    const color = isTwitter ? '#1DA1F2' : '#1877F2';
+    const platformName = isTwitter ? 'X (تويتر)' : 'فيسبوك';
+    const [imgFailed, setImgFailed] = useState(false);
+    const hasImage = post.image && !imgFailed;
+
+    return (
+        <motion.article
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-50px' }}
+            transition={{ duration: 0.6 }}
+            className={`grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl transition-shadow duration-500 border border-gray-100 p-6 md:p-8 ${reverse ? 'lg:[direction:ltr]' : ''}`}
+        >
+            {/* Image column */}
+            <div className="lg:col-span-5" style={{ direction: 'rtl' }}>
+                {hasImage ? (
+                    <a
+                        href={post.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="relative block w-full overflow-hidden rounded-2xl bg-gray-100 border border-gray-100 group shadow-md aspect-[4/3]"
+                    >
+                        <img
+                            src={post.image}
+                            alt={post.title || 'منشور'}
+                            onError={() => setImgFailed(true)}
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none"></div>
+                        <div
+                            className="absolute top-4 left-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full shadow-lg backdrop-blur-md border text-xs font-bold text-white"
+                            style={{ backgroundColor: `${color}cc`, borderColor: `${color}` }}
+                        >
+                            {isTwitter ? <Twitter size={12} /> : <Facebook size={12} />}
+                            {platformName}
+                        </div>
+                    </a>
+                ) : (
+                    <div
+                        className="w-full aspect-[4/3] rounded-2xl flex flex-col items-center justify-center gap-4 border-2"
+                        style={{
+                            background: `linear-gradient(135deg, ${color}26 0%, ${color}0a 100%)`,
+                            borderColor: `${color}55`,
+                        }}
+                    >
+                        {isTwitter ? <Twitter size={64} style={{ color }} /> : <Facebook size={64} style={{ color }} />}
+                        <span className="text-gray-500 text-sm font-bold">منشور نصي على {platformName}</span>
+                    </div>
+                )}
+            </div>
+
+            {/* Body column */}
+            <div className="lg:col-span-7 flex flex-col gap-5" style={{ direction: 'rtl' }}>
+                <div className="flex items-center gap-3">
+                    <div
+                        className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 text-base font-black text-white shadow-md"
+                        style={{ background: `linear-gradient(135deg, ${color}, ${color}aa)` }}
+                    >
+                        {(post.title || '?')[0]}
+                    </div>
+                    <div className="flex flex-col">
+                        <h3 className="text-slate-900 font-bold text-lg md:text-xl leading-tight">{post.title || 'منشور بدون عنوان'}</h3>
+                        <span className="text-gray-400 text-xs tracking-wider mt-0.5">
+                            منشور على {platformName}
+                        </span>
+                    </div>
+                </div>
+
+                {post.description && (
+                    <p className="text-slate-700 text-sm md:text-base leading-loose whitespace-pre-line">
+                        {post.description}
+                    </p>
+                )}
+
+                <div className="flex flex-wrap items-center gap-3 pt-2 mt-auto">
+                    <a
+                        href={post.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-white text-sm font-bold transition-all shadow-md hover:shadow-lg hover:scale-105"
+                        style={{ background: `linear-gradient(to right, ${color}, ${color}cc)` }}
+                    >
+                        <ExternalLink size={14} />
+                        قراءة المنشور كاملاً على {platformName}
+                    </a>
+                    <span className="text-gray-400 text-xs font-mono truncate max-w-[220px]" dir="ltr">
+                        {post.sourceUrl}
+                    </span>
+                </div>
+            </div>
+        </motion.article>
+    );
+};
 
 const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
     const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
@@ -191,6 +290,25 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                         <Newspaper size={64} className="mx-auto mb-4 opacity-20" />
                         <p>لا توجد مقالات منشورة حالياً.</p>
                     </div>
+                )}
+
+                {/* Social Posts as Articles */}
+                {SOCIAL_POSTS && SOCIAL_POSTS.length > 0 && (
+                    <section className="mt-24">
+                        <div className="flex items-center gap-6 mb-12">
+                            <h2 className="text-3xl font-heading font-bold text-slate-800 whitespace-nowrap">
+                                <span className="text-gold-500">منشورات</span> من منصات التواصل
+                            </h2>
+                            <div className="h-px bg-gradient-to-l from-slate-200 to-transparent flex-1"></div>
+                        </div>
+                        <p className="text-gray-500 mb-10 max-w-2xl text-sm md:text-base leading-relaxed">
+                            مجموعة من المنشورات الكاملة التي شاركها متابعون وكتّاب عن الإعلامي جميل عزّالدين على فيسبوك وX (تويتر).
+                        </p>
+
+                        <div className="space-y-12">
+                            {SOCIAL_POSTS.map((post, idx) => <SocialPostArticle key={post.id} post={post} reverse={idx % 2 === 1} />)}
+                        </div>
+                    </section>
                 )}
             </div>
 
