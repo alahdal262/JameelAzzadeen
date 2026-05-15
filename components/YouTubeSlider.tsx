@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Youtube, Play, X, Calendar, Eye, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Section, Video } from '../types';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface YouTubeSliderProps {
     videos: Video[];
@@ -15,6 +16,7 @@ const YouTubeSlider: React.FC<YouTubeSliderProps> = ({ videos }) => {
   const [scrollLeft, setScrollLeft] = useState(0);
   const autoScrollPausedRef = useRef(false);
   const pauseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { t, lang } = useLanguage();
 
   const displayVideos = [...videos, ...videos, ...videos];
 
@@ -120,11 +122,19 @@ const YouTubeSlider: React.FC<YouTubeSliderProps> = ({ videos }) => {
     <section id={Section.VIDEOS} className="py-24 bg-gradient-to-b from-gray-50 to-white relative overflow-hidden">
       <div className="container mx-auto px-4 relative z-10 mb-12">
         <div className="flex items-center gap-3 mb-2">
-            <div className="bg-red-600 p-2 rounded-lg text-white"><Youtube size={24} /></div>
-            <h2 className="text-3xl md:text-5xl font-heading font-black text-slate-900">
-                مكتبة <span className="text-red-600">الفيديو</span>
-            </h2>
+            <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-red-500/30">
+                <Youtube size={20} />
+            </div>
+            <span className="text-red-600 font-bold text-xs tracking-widest uppercase">{t.videos.sectionTag}</span>
         </div>
+        <h2 className="text-3xl md:text-5xl font-heading font-black text-slate-900 mt-1">
+            {lang === 'ar' ? (
+                <>مكتبة <span className="text-red-600">الفيديو</span></>
+            ) : (
+                <><span className="text-red-600">Video</span> Library</>
+            )}
+        </h2>
+        <p className="text-gray-500 mt-2 text-sm">{t.videos.subtitle}</p>
       </div>
 
       <div className="relative group/slider">
@@ -172,11 +182,11 @@ const YouTubeSlider: React.FC<YouTubeSliderProps> = ({ videos }) => {
                             </div>
                         </div>
                     </div>
-                    <div className="p-6 text-right" dir="rtl">
-                        <h3 className="text-lg font-bold text-slate-800 line-clamp-2">{video.title}</h3>
-                        <div className="flex items-center justify-between mt-4 text-xs text-gray-500">
-                            <span className="flex items-center gap-1"><Calendar size={12}/> {video.date}</span>
-                            <span className="flex items-center gap-1"><Eye size={12}/> {video.views}</span>
+                    <div className={`p-5 ${lang === 'ar' ? 'text-right' : 'text-left'}`} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+                        <h3 className="text-base font-bold text-slate-800 line-clamp-2 leading-snug">{video.title}</h3>
+                        <div className="flex items-center justify-between mt-3 text-xs text-gray-400">
+                            <span className="flex items-center gap-1"><Calendar size={11}/> {video.date}</span>
+                            <span className="flex items-center gap-1"><Eye size={11}/> {video.views}</span>
                         </div>
                     </div>
                 </div>
@@ -210,7 +220,7 @@ const YouTubeSlider: React.FC<YouTubeSliderProps> = ({ videos }) => {
 
            <div className="w-full max-w-5xl px-4 flex flex-col items-center">
                 <div className="mb-4 text-white/40 text-sm font-bold bg-white/5 px-4 py-1 rounded-full border border-white/10">
-                    فيديو {selectedVideoIndex + 1} من {videos.length}
+                    {lang === 'ar' ? `فيديو ${selectedVideoIndex + 1} من ${videos.length}` : `Video ${selectedVideoIndex + 1} of ${videos.length}`}
                 </div>
                 <div className="w-full aspect-video rounded-2xl overflow-hidden shadow-2xl bg-black border border-white/10 animate-fade-in">
                     <iframe 

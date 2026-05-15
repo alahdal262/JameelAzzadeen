@@ -14,9 +14,11 @@ import LoginPage from './components/admin/LoginPage';
 import Dashboard from './components/admin/Dashboard';
 import { Section, AppView, Testimonial, Video, CareerMoment, Article, GalleryImage } from './types';
 import { StorageService } from './services/storage';
-import { Loader2, AlertTriangle, Copy, Check, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Copy, RefreshCw } from 'lucide-react';
+import { useLanguage } from './i18n/LanguageContext';
 
 const App: React.FC = () => {
+  const { t } = useLanguage();
   const [activeSection, setActiveSection] = useState<Section>(Section.HOME);
   const [currentView, setCurrentView] = useState<AppView>('home');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -246,7 +248,7 @@ service cloud.firestore {
 
   if (isLoading) {
       return (
-          <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white gap-4 relative overflow-hidden">
+          <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white gap-6 relative overflow-hidden">
               <style>{`
                   @keyframes shimmer {
                       0% { background-position: 200% 0; }
@@ -260,11 +262,18 @@ service cloud.firestore {
                       -webkit-text-fill-color: transparent;
                       animation: shimmer 3s linear infinite;
                   }
+                  @keyframes spin-slow {
+                      to { transform: rotate(360deg); }
+                  }
+                  .spin-slow { animation: spin-slow 2s linear infinite; }
               `}</style>
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(245,158,11,0.08)_0%,_transparent_60%)]"></div>
               <div className="z-10 text-center space-y-4">
+                  <div className="w-16 h-16 border-2 border-white/10 border-t-gold-500 rounded-full spin-slow mx-auto mb-2"></div>
                   <h1 className="text-3xl md:text-5xl font-heading font-black shimmer-text leading-tight p-2">
                       الإعلامي جميل عزالدين
                   </h1>
+                  <p className="text-gray-500 text-sm">{t.loading}</p>
               </div>
           </div>
       );

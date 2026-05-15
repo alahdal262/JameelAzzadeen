@@ -1,6 +1,7 @@
 import React from 'react';
 import { Facebook, ThumbsUp, MessageSquare, Share2, Globe } from 'lucide-react';
 import { Section, Post } from '../types';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const POSTS: Post[] = [
   {
@@ -26,16 +27,18 @@ const POSTS: Post[] = [
 ];
 
 const FacebookSection: React.FC = () => {
+  const { t, lang } = useLanguage();
   return (
-    <section id={Section.FACEBOOK} className="py-20 bg-white">
+    <section id={Section.FACEBOOK} className="py-20 bg-gray-50">
       <div className="container mx-auto px-4">
         <div className="flex items-center gap-4 mb-12">
-           <div className="w-12 h-12 bg-[#1877F2] rounded-full flex items-center justify-center text-white shadow-lg">
-             <Facebook size={24} />
+           <div className="w-12 h-12 bg-[#1877F2] rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-500/25">
+             <Facebook size={22} />
            </div>
            <div>
-             <h2 className="text-3xl font-heading font-bold text-slate-800">فيسبوك</h2>
-             <p className="text-gray-500 text-sm">تواصل مستمر مع الجمهور</p>
+             <div className="text-[#1877F2] font-bold text-xs tracking-widest uppercase mb-0.5">{t.facebook.sectionTag}</div>
+             <h2 className="text-3xl font-heading font-bold text-slate-800">{lang === 'ar' ? 'فيسبوك' : 'Facebook'}</h2>
+             <p className="text-gray-500 text-sm">{t.facebook.subtitle}</p>
            </div>
         </div>
 
@@ -109,8 +112,10 @@ const FacebookSection: React.FC = () => {
         </div>
         
         <div className="text-center mt-10">
-            <a href="https://www.facebook.com/jamilez2015" target="_blank" rel="noreferrer" className="inline-block px-6 py-3 bg-[#1877F2] text-white rounded-lg font-bold hover:bg-blue-700 transition-colors">
-                تابع الصفحة الرسمية على فيسبوك
+            <a href="https://www.facebook.com/jamilez2015" target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-2 px-7 py-3 bg-[#1877F2] hover:bg-blue-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-500/20 text-sm">
+                <Facebook size={18} />
+                {t.facebook.followBtn}
             </a>
         </div>
       </div>

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { ArrowRight, Calendar, User, Clock, X, Share2, ChevronLeft, Newspaper } from 'lucide-react';
 import { Article } from '../types';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface ArticlesPageProps {
     onBack: () => void;
@@ -10,6 +11,7 @@ interface ArticlesPageProps {
 
 const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
     const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+    const { t } = useLanguage();
 
     const handleShare = async () => {
         if (!selectedArticle) return;
