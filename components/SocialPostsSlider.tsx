@@ -5,77 +5,93 @@ import { SOCIAL_POSTS, SocialPost } from '../data/socialPosts';
 const PostLinkCard: React.FC<{ post: SocialPost }> = ({ post }) => {
   const isTwitter = post.type === 'twitter';
   const color = isTwitter ? '#1DA1F2' : '#1877F2';
-  const ctaText = isTwitter ? 'فتح المنشور على X' : 'فتح المنشور على فيسبوك';
+  const platformName = isTwitter ? 'X (تويتر)' : 'فيسبوك';
+  const ctaText = isTwitter ? 'قراءة المنشور كاملاً على X' : 'قراءة المنشور كاملاً على فيسبوك';
   const [imgFailed, setImgFailed] = useState(false);
+  const hasImage = post.image && !imgFailed;
 
   return (
-    <a
-      href={post.sourceUrl}
-      target="_blank"
-      rel="noreferrer"
-      onClick={e => e.stopPropagation()}
-      className="w-full flex flex-col gap-3 min-h-[520px] group cursor-pointer"
-    >
-      {/* Image */}
-      {post.image && !imgFailed ? (
-        <div className="relative w-full overflow-hidden rounded-xl bg-slate-950 border border-white/10">
-          <img
-            src={post.image}
-            alt={post.title || 'منشور'}
-            onError={() => setImgFailed(true)}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            className="w-full h-[320px] object-cover transition-transform duration-700 group-hover:scale-105"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent pointer-events-none"></div>
-          <div
-            className="absolute top-3 left-3 w-9 h-9 rounded-full flex items-center justify-center shadow-lg backdrop-blur-md border"
-            style={{ backgroundColor: `${color}33`, borderColor: `${color}88` }}
+    <article className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 px-2 lg:px-6 py-2">
+      {/* Image side */}
+      <div className={`lg:col-span-5 ${hasImage ? '' : 'lg:col-span-4'}`}>
+        {hasImage ? (
+          <a
+            href={post.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="relative block w-full overflow-hidden rounded-2xl bg-slate-950 border border-white/10 group shadow-2xl"
           >
-            {isTwitter ? <Twitter size={16} style={{ color }} /> : <Facebook size={16} style={{ color }} />}
-          </div>
-        </div>
-      ) : (
-        <div
-          className="w-full h-[200px] rounded-xl flex items-center justify-center border-2"
-          style={{
-            background: `linear-gradient(135deg, ${color}1a 0%, ${color}05 100%)`,
-            borderColor: `${color}40`,
-          }}
-        >
-          {isTwitter ? <Twitter size={56} style={{ color }} /> : <Facebook size={56} style={{ color }} />}
-        </div>
-      )}
-
-      {/* Author + text */}
-      <div className="px-1 flex-1 flex flex-col gap-2">
-        {post.title && (
-          <div className="flex items-center gap-2.5">
+            <img
+              src={post.image}
+              alt={post.title || 'منشور'}
+              onError={() => setImgFailed(true)}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              className="w-full h-[280px] lg:h-[420px] object-cover transition-transform duration-700 group-hover:scale-105"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent pointer-events-none"></div>
             <div
-              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-black text-white"
+              className="absolute top-4 left-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full shadow-lg backdrop-blur-md border text-xs font-bold text-white"
+              style={{ backgroundColor: `${color}30`, borderColor: `${color}88` }}
+            >
+              {isTwitter ? <Twitter size={12} style={{ color }} /> : <Facebook size={12} style={{ color }} />}
+              {platformName}
+            </div>
+          </a>
+        ) : (
+          <div
+            className="w-full h-[240px] lg:h-[420px] rounded-2xl flex flex-col items-center justify-center gap-4 border-2"
+            style={{
+              background: `linear-gradient(135deg, ${color}26 0%, ${color}0a 100%)`,
+              borderColor: `${color}55`,
+            }}
+          >
+            {isTwitter ? <Twitter size={72} style={{ color }} /> : <Facebook size={72} style={{ color }} />}
+            <span className="text-white/50 text-sm font-bold">منشور نصي على {platformName}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Article body */}
+      <div className="lg:col-span-7 flex flex-col gap-5 lg:py-4">
+        {/* Author block */}
+        {post.title && (
+          <div className="flex items-center gap-3">
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 text-base font-black text-white shadow-lg"
               style={{ background: `linear-gradient(135deg, ${color}, ${color}aa)` }}
             >
               {post.title[0] || '?'}
             </div>
-            <h4 className="text-white font-bold text-base truncate">{post.title}</h4>
+            <div className="flex flex-col">
+              <h3 className="text-white font-bold text-lg lg:text-xl leading-tight">{post.title}</h3>
+              <span className="text-white/40 text-xs tracking-wider">منشور على {platformName}</span>
+            </div>
           </div>
         )}
+
+        {/* Body */}
         {post.description && (
-          <p className="text-white/75 text-sm leading-relaxed line-clamp-4 whitespace-pre-line">
+          <p className="text-white/85 text-sm lg:text-base leading-loose whitespace-pre-line line-clamp-[10]">
             {post.description}
           </p>
         )}
-      </div>
 
-      {/* CTA */}
-      <div
-        className="self-stretch inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full text-white text-sm font-bold transition-all shadow-lg group-hover:shadow-xl group-hover:scale-[1.02]"
-        style={{ background: `linear-gradient(to right, ${color}, ${color}cc)` }}
-      >
-        <ExternalLink size={14} />
-        {ctaText}
+        {/* CTA */}
+        <a
+          href={post.sourceUrl}
+          target="_blank"
+          rel="noreferrer"
+          onClick={e => e.stopPropagation()}
+          className="self-start inline-flex items-center gap-2 px-6 py-3 rounded-full text-white text-sm font-bold transition-all shadow-xl hover:shadow-2xl hover:scale-105"
+          style={{ background: `linear-gradient(to right, ${color}, ${color}cc)` }}
+        >
+          <ExternalLink size={15} />
+          {ctaText}
+        </a>
       </div>
-    </a>
+    </article>
   );
 };
 
@@ -117,7 +133,7 @@ const PostCard: React.FC<{ post: SocialPost }> = ({ post }) => {
         </a>
       </div>
 
-      <div className="flex-1 flex items-stretch justify-center bg-gradient-to-b from-white/[0.03] to-white/[0.01] px-4 py-4">
+      <div className="flex-1 bg-gradient-to-b from-white/[0.03] to-white/[0.01] px-4 py-6">
         <PostLinkCard post={post} />
       </div>
 
@@ -140,8 +156,8 @@ const PostCard: React.FC<{ post: SocialPost }> = ({ post }) => {
 };
 
 const GAP = 0;
-const PEEK = 56;
-const AUTOPLAY_MS = 5500;
+const PEEK = 0;
+const AUTOPLAY_MS = 6500;
 const TRANSITION_MS = 700;
 const REWIND_MS = 1100; // slightly longer rewind so it looks intentional
 
@@ -243,29 +259,19 @@ const SocialPostsSlider: React.FC = () => {
             willChange: 'transform',
           }}
         >
-          {SOCIAL_POSTS.map((post, idx) => {
-            const isActive = idx === current;
-            return (
-              <div
-                key={post.id}
-                onClick={() => !isActive && goTo(idx)}
-                style={{ width: `${cardWidth}px`, minWidth: `${cardWidth}px` }}
-                className={`flex-shrink-0 rounded-2xl border overflow-hidden transition-[opacity,transform,border-color,box-shadow] duration-700 ease-out ${
-                  isActive
-                    ? 'border-gold-500/30 opacity-100 scale-100 shadow-[0_20px_60px_-15px_rgba(202,138,4,0.3)] cursor-default ring-1 ring-gold-500/10'
-                    : 'border-white/5 opacity-30 scale-[0.94] cursor-pointer hover:opacity-60 hover:border-white/15'
-                } bg-slate-800/80 backdrop-blur-sm`}
-              >
-                <PostCard post={post} />
-              </div>
-            );
-          })}
+          {SOCIAL_POSTS.map((post) => (
+            <div
+              key={post.id}
+              style={{ width: `${cardWidth}px`, minWidth: `${cardWidth}px` }}
+              className="flex-shrink-0 rounded-2xl border border-white/10 overflow-hidden bg-slate-800/60 backdrop-blur-sm shadow-2xl"
+            >
+              <PostCard post={post} />
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Side gradient fades */}
-      <div className="absolute inset-y-0 left-0 w-28 bg-gradient-to-r from-slate-950 via-slate-950/85 to-transparent pointer-events-none z-10" />
-      <div className="absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-slate-950 via-slate-950/85 to-transparent pointer-events-none z-10" />
 
       {/* Prev / Next buttons */}
       <button
