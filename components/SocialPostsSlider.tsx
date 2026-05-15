@@ -2,37 +2,64 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Facebook, Twitter, ChevronLeft, ChevronRight, ExternalLink, Pause, Play } from 'lucide-react';
 import { SOCIAL_POSTS, SocialPost } from '../data/socialPosts';
 
-const TwitterCardLink: React.FC<{ sourceUrl: string }> = ({ sourceUrl }) => {
-  const handle = sourceUrl.match(/(?:twitter\.com|x\.com)\/([^/]+)\//)?.[1] || 'g_khamre';
+const PostLinkCard: React.FC<{ post: SocialPost }> = ({ post }) => {
+  const isTwitter = post.type === 'twitter';
+  const color = isTwitter ? '#1DA1F2' : '#1877F2';
+  const label = isTwitter ? 'X (تويتر)' : 'فيسبوك';
+  const ctaText = isTwitter ? 'فتح المنشور على X' : 'فتح المنشور على فيسبوك';
+  const handle = isTwitter
+    ? (post.sourceUrl.match(/(?:twitter\.com|x\.com)\/([^/]+)\//)?.[1] || '')
+    : '';
+
   return (
-    <div className="w-full flex flex-col items-center justify-center gap-5 py-10 text-center min-h-[480px]">
-      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#1DA1F2]/30 to-[#1DA1F2]/10 border-2 border-[#1DA1F2]/40 flex items-center justify-center shadow-2xl">
-        <Twitter size={36} className="text-[#1DA1F2]" />
+    <div className="w-full flex flex-col items-center justify-center gap-5 py-10 text-center min-h-[480px] relative">
+      <div
+        className="w-24 h-24 rounded-full flex items-center justify-center shadow-2xl border-2"
+        style={{
+          background: `linear-gradient(135deg, ${color}40 0%, ${color}10 100%)`,
+          borderColor: `${color}66`,
+        }}
+      >
+        {isTwitter ? <Twitter size={44} style={{ color }} /> : <Facebook size={44} style={{ color }} />}
       </div>
-      <div className="space-y-2">
-        <h4 className="text-white text-xl font-bold">منشور على X (تويتر)</h4>
-        <p className="text-white/60 text-sm max-w-sm leading-relaxed">
-          منشور رسمي من حساب
-          <span className="text-[#1DA1F2] font-mono mx-1.5" dir="ltr">@{handle}</span>
-          على منصة X
+
+      <div className="space-y-2 px-4">
+        <h4 className="text-white text-xl md:text-2xl font-bold">
+          منشور على <span style={{ color }}>{label}</span>
+        </h4>
+        <p className="text-white/60 text-sm md:text-base max-w-md leading-relaxed">
+          {isTwitter
+            ? <>منشور رسمي من حساب<span className="text-[#1DA1F2] font-mono mx-1.5" dir="ltr">@{handle}</span>على منصة X</>
+            : <>منشور عام شاركه أحد المتابعين على فيسبوك حول الإعلامي جميل عزّالدين</>
+          }
         </p>
       </div>
+
       <a
-        href={sourceUrl}
+        href={post.sourceUrl}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-[#1DA1F2] to-[#1a91da] hover:from-[#1a91da] hover:to-[#1981c4] text-white text-sm font-bold transition-all shadow-lg hover:shadow-xl hover:scale-105"
+        className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-white text-sm md:text-base font-bold transition-all shadow-xl hover:shadow-2xl hover:scale-105"
+        style={{ background: `linear-gradient(to right, ${color}, ${color}cc)` }}
         onClick={e => e.stopPropagation()}
       >
-        <ExternalLink size={14} />
-        فتح المنشور على X
+        <ExternalLink size={16} />
+        {ctaText}
       </a>
-      <span className="text-xs text-white/30 font-mono mt-2" dir="ltr">{sourceUrl}</span>
+
+      {/* Decorative pattern */}
+      <div
+        className="absolute inset-0 opacity-[0.04] pointer-events-none rounded-2xl"
+        style={{
+          backgroundImage: `radial-gradient(circle at 30% 20%, ${color} 1px, transparent 1px), radial-gradient(circle at 70% 80%, ${color} 1px, transparent 1px)`,
+          backgroundSize: '40px 40px, 30px 30px',
+        }}
+      ></div>
     </div>
   );
 };
 
-const PostCard: React.FC<{ post: SocialPost; active: boolean }> = ({ post, active }) => {
+const PostCard: React.FC<{ post: SocialPost }> = ({ post }) => {
   const isTwitter = post.type === 'twitter';
   const platformColor = isTwitter ? '#1DA1F2' : '#1877F2';
 
@@ -70,30 +97,8 @@ const PostCard: React.FC<{ post: SocialPost; active: boolean }> = ({ post, activ
         </a>
       </div>
 
-      <div className="flex-1 flex items-start justify-center bg-gradient-to-b from-white/[0.03] to-white/[0.01] px-4 pt-4 pb-3">
-        {active ? (
-          isTwitter ? (
-            <TwitterCardLink sourceUrl={post.sourceUrl} />
-          ) : (
-            <iframe
-              src={post.embedUrl}
-              width="500"
-              height={post.height}
-              style={{ border: 'none', overflow: 'hidden', maxWidth: '100%', width: '100%' }}
-              scrolling="no"
-              frameBorder="0"
-              allowFullScreen
-              allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-              className="rounded-lg"
-            />
-          )
-        ) : (
-          <div className="w-full flex items-center justify-center" style={{ height: post.height }}>
-            <div className="text-white/10">
-              {isTwitter ? <Twitter size={56} /> : <Facebook size={56} />}
-            </div>
-          </div>
-        )}
+      <div className="flex-1 flex items-stretch justify-center bg-gradient-to-b from-white/[0.03] to-white/[0.01] px-4 py-4">
+        <PostLinkCard post={post} />
       </div>
 
       <div className="px-5 py-3 border-t border-white/10 bg-slate-950/40 flex items-center gap-2.5 mt-auto">
@@ -220,8 +225,6 @@ const SocialPostsSlider: React.FC = () => {
         >
           {SOCIAL_POSTS.map((post, idx) => {
             const isActive = idx === current;
-            const isAdjacent = Math.abs(idx - current) === 1
-              || Math.abs(idx - current) === total - 1; // also handle wrap-around adjacency
             return (
               <div
                 key={post.id}
@@ -233,7 +236,7 @@ const SocialPostsSlider: React.FC = () => {
                     : 'border-white/5 opacity-30 scale-[0.94] cursor-pointer hover:opacity-60 hover:border-white/15'
                 } bg-slate-800/80 backdrop-blur-sm`}
               >
-                <PostCard post={post} active={isActive || isAdjacent} />
+                <PostCard post={post} />
               </div>
             );
           })}
