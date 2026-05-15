@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Facebook, Twitter, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Facebook, Twitter, ChevronLeft, ChevronRight, ExternalLink, Pause, Play } from 'lucide-react';
 import { SOCIAL_POSTS, SocialPost } from '../data/socialPosts';
 
 const TwitterEmbed: React.FC<{ tweetId: string }> = ({ tweetId }) => {
@@ -119,17 +119,36 @@ const PostCard: React.FC<{ post: SocialPost; active: boolean }> = ({ post, activ
 };
 
 const GAP = 20;
-const PEEK = 72; // px of adjacent card visible on each side
+const PEEK = 72;
+const CLONES = 2;
+const TRANSITION_MS = 800;
+const AUTOPLAY_MS = 5500;
+const EASING = 'cubic-bezier(0.32, 0.72, 0, 1)';
 
 const SocialPostsSlider: React.FC = () => {
-  const [current, setCurrent] = useState(0);
+  const total = SOCIAL_POSTS.length;
+  // Index in extended array; start at CLONES → first real post is at idx=CLONES
+  const [index, setIndex] = useState(CLONES);
+  const [transition, setTransition] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
   const [cardWidth, setCardWidth] = useState(780);
   const sliderRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const total = SOCIAL_POSTS.length;
 
-  // Compute card width from container
+  // Real visible post index (for dots + counter)
+  const realIndex = ((index - CLONES) % total + total) % total;
+
+  // Extended posts: [last N clones, ...all real, first N clones]
+  const extendedPosts = useMemo(
+    () => [
+      ...SOCIAL_POSTS.slice(total - CLONES),
+      ...SOCIAL_POSTS,
+      ...SOCIAL_POSTS.slice(0, CLONES),
+    ],
+    [total]
+  );
+
+  // Compute card width
   useEffect(() => {
     const update = () => {
       if (sliderRef.current) {
@@ -143,23 +162,81 @@ const SocialPostsSlider: React.FC = () => {
     return () => ro.disconnect();
   }, []);
 
-  const next = useCallback(() => setCurrent(p => (p + 1) % total), [total]);
-  const prev = useCallback(() => setCurrent(p => (p - 1 + total) % total), [total]);
+  const advance = useCallback((delta: number) => {
+    setTransition(true);
+    setIndex(i => i + delta);
+  }, []);
 
+  const next = useCallback(() => advance(1), [advance]);
+  const prev = useCallback(() => advance(-1), [advance]);
+
+  // Auto-play (continuous loop)
   useEffect(() => {
-    if (isPaused) return;
-    timerRef.current = setInterval(next, 6000);
+    if (isPaused) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
+    timerRef.current = setInterval(() => advance(1), AUTOPLAY_MS);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [isPaused, next]);
+  }, [isPaused, advance]);
 
-  const goTo = (idx: number) => {
-    setCurrent(idx);
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(next, 6000);
+  // After transition ends: silently snap from clone → real twin if needed
+  const onTransitionEnd = () => {
+    if (index >= total + CLONES) {
+      setTransition(false);
+      setIndex(i => i - total);
+    } else if (index < CLONES) {
+      setTransition(false);
+      setIndex(i => i + total);
+    }
   };
 
-  // translateX: center the current card, let adjacent cards peek
-  const translateX = PEEK + GAP - current * (cardWidth + GAP);
+  // Re-enable transition AFTER browser paints the silent snap
+  useEffect(() => {
+    if (transition) return;
+    const r1 = requestAnimationFrame(() => {
+      const r2 = requestAnimationFrame(() => setTransition(true));
+      return () => cancelAnimationFrame(r2);
+    });
+    return () => cancelAnimationFrame(r1);
+  }, [transition]);
+
+  // Reset autoplay timer when user jumps via dot/click
+  const resetTimer = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (!isPaused) {
+      timerRef.current = setInterval(() => advance(1), AUTOPLAY_MS);
+    }
+  }, [isPaused, advance]);
+
+  const goToReal = (realIdx: number) => {
+    setTransition(true);
+    setIndex(CLONES + realIdx);
+    resetTimer();
+  };
+
+  const jumpToExtended = (extIdx: number) => {
+    setTransition(true);
+    setIndex(extIdx);
+    resetTimer();
+  };
+
+  // Render iframe for active + adjacent + mirror (for seamless clone handoff)
+  const shouldRender = (idx: number) => {
+    if (Math.abs(idx - index) <= 1) return true;
+    // Also pre-render the mirror position so clone-to-real snap is invisible
+    if (index >= total + CLONES - 1) {
+      const mirror = index - total;
+      if (Math.abs(idx - mirror) <= 1) return true;
+    }
+    if (index <= CLONES) {
+      const mirror = index + total;
+      if (Math.abs(idx - mirror) <= 1) return true;
+    }
+    return false;
+  };
+
+  const translateX = PEEK + GAP - index * (cardWidth + GAP);
 
   return (
     <div
@@ -169,14 +246,19 @@ const SocialPostsSlider: React.FC = () => {
     >
       {/* Counter pill */}
       <div className="flex items-center justify-center gap-3 mb-6">
-        <span className="text-white/40 text-xs font-bold tracking-wider">
-          المنشور
-        </span>
+        <button
+          onClick={() => setIsPaused(p => !p)}
+          className="w-7 h-7 rounded-full bg-white/5 hover:bg-gold-500/20 border border-white/10 hover:border-gold-500/40 flex items-center justify-center text-white/70 hover:text-gold-300 transition-all"
+          aria-label={isPaused ? 'تشغيل' : 'إيقاف'}
+        >
+          {isPaused ? <Play size={11} fill="currentColor" /> : <Pause size={11} fill="currentColor" />}
+        </button>
+        <span className="text-white/40 text-xs font-bold tracking-wider">المنشور</span>
         <span
           className="bg-gradient-to-br from-gold-500/20 to-gold-600/10 border border-gold-500/30 px-4 py-1.5 rounded-full text-xs text-gold-300 font-mono font-bold shadow-lg"
           dir="ltr"
         >
-          <span className="text-white">{String(current + 1).padStart(2, '0')}</span>
+          <span className="text-white">{String(realIndex + 1).padStart(2, '0')}</span>
           <span className="text-gold-400/50 mx-1.5">/</span>
           <span className="text-white/60">{String(total).padStart(2, '0')}</span>
         </span>
@@ -185,33 +267,37 @@ const SocialPostsSlider: React.FC = () => {
       {/* Slider viewport */}
       <div ref={sliderRef} className="overflow-hidden">
         <div
-          className="flex transition-transform duration-700 ease-in-out"
-          style={{ gap: `${GAP}px`, transform: `translateX(${translateX}px)` }}
+          onTransitionEnd={onTransitionEnd}
+          className="flex"
+          style={{
+            gap: `${GAP}px`,
+            transform: `translateX(${translateX}px)`,
+            transition: transition ? `transform ${TRANSITION_MS}ms ${EASING}` : 'none',
+            willChange: 'transform',
+          }}
         >
-          {SOCIAL_POSTS.map((post, idx) => {
-            const isActive = idx === current;
-            const isAdjacent = Math.abs(idx - current) === 1;
+          {extendedPosts.map((post, idx) => {
+            const isActive = idx === index;
             return (
               <div
-                key={post.id}
-                onClick={() => !isActive && goTo(idx)}
+                key={`${post.id}-${idx}`}
+                onClick={() => !isActive && jumpToExtended(idx)}
                 style={{ width: `${cardWidth}px`, minWidth: `${cardWidth}px` }}
-                className={`flex-shrink-0 rounded-2xl border overflow-hidden transition-all duration-700 ${
+                className={`flex-shrink-0 rounded-2xl border overflow-hidden transition-[opacity,transform,border-color,box-shadow] duration-700 ease-out ${
                   isActive
                     ? 'border-gold-500/30 opacity-100 scale-100 shadow-[0_20px_60px_-15px_rgba(202,138,4,0.3)] cursor-default ring-1 ring-gold-500/10'
                     : 'border-white/5 opacity-30 scale-[0.94] cursor-pointer hover:opacity-60 hover:border-white/15'
                 } bg-slate-800/80 backdrop-blur-sm`}
               >
-                <PostCard post={post} active={isActive || isAdjacent} />
+                <PostCard post={post} active={shouldRender(idx)} />
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Gradient fade — left */}
+      {/* Gradient fades */}
       <div className="absolute inset-y-0 left-0 w-28 bg-gradient-to-r from-slate-950 via-slate-950/85 to-transparent pointer-events-none z-10" />
-      {/* Gradient fade — right */}
       <div className="absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-slate-950 via-slate-950/85 to-transparent pointer-events-none z-10" />
 
       {/* Prev / Next buttons */}
@@ -235,9 +321,9 @@ const SocialPostsSlider: React.FC = () => {
         {SOCIAL_POSTS.map((_, idx) => (
           <button
             key={idx}
-            onClick={() => goTo(idx)}
+            onClick={() => goToReal(idx)}
             className={`transition-all duration-500 rounded-full ${
-              idx === current
+              idx === realIndex
                 ? 'w-8 h-2 bg-gradient-to-r from-gold-400 to-gold-500 shadow-lg shadow-gold-500/30'
                 : 'w-2 h-2 bg-white/15 hover:bg-white/30 hover:scale-125'
             }`}
@@ -250,16 +336,16 @@ const SocialPostsSlider: React.FC = () => {
       <div className="mt-5 h-[2px] bg-white/[0.06] rounded-full overflow-hidden mx-auto max-w-md">
         {!isPaused && (
           <div
-            key={current}
+            key={index}
             className="h-full bg-gradient-to-r from-gold-400 to-gold-500 rounded-full shadow-[0_0_10px_rgba(202,138,4,0.5)]"
-            style={{ animation: 'slider-progress 6s linear forwards' }}
+            style={{ animation: `slider-progress ${AUTOPLAY_MS}ms linear forwards` }}
           />
         )}
       </div>
 
-      {/* Pause hint */}
+      {/* Hint */}
       <div className="mt-3 text-center text-white/30 text-xs">
-        {isPaused ? 'متوقف · أبعد المؤشر للاستئناف' : 'مرّر الفأرة على الـ slider للإيقاف المؤقت'}
+        {isPaused ? 'متوقف · اضغط زر التشغيل أو أبعد المؤشر' : 'تشغيل تلقائي · مرّر الفأرة للإيقاف'}
       </div>
 
       <style>{`
