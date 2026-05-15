@@ -24,9 +24,7 @@ const TwitterEmbed: React.FC<{ tweetId: string }> = ({ tweetId }) => {
       document.head.appendChild(s);
     }
   }, [tweetId]);
-  return (
-    <div ref={ref} className="flex justify-center items-start overflow-y-auto max-h-[560px] w-full" />
-  );
+  return <div ref={ref} className="w-full flex justify-center py-4" />;
 };
 
 const PostCard: React.FC<{ post: SocialPost; active: boolean }> = ({ post, active }) => {
@@ -34,18 +32,18 @@ const PostCard: React.FC<{ post: SocialPost; active: boolean }> = ({ post, activ
   const tweetId = isTwitter ? post.embedUrl.replace('twitter:', '') : '';
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Card header */}
-      <div className={`flex items-center justify-between px-5 py-3 rounded-t-2xl ${
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className={`flex items-center justify-between px-5 py-3 ${
         isTwitter
-          ? 'bg-[#1DA1F2]/10 border-b border-[#1DA1F2]/20'
-          : 'bg-[#1877F2]/10 border-b border-[#1877F2]/20'
+          ? 'bg-[#1DA1F2]/10 border-b border-[#1DA1F2]/15'
+          : 'bg-[#1877F2]/10 border-b border-[#1877F2]/15'
       }`}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           {isTwitter
-            ? <Twitter size={18} className="text-[#1DA1F2]" />
-            : <Facebook size={18} className="text-[#1877F2]" />}
-          <span className="text-sm font-bold text-white/80">
+            ? <Twitter size={16} className="text-[#1DA1F2]" />
+            : <Facebook size={16} className="text-[#1877F2]" />}
+          <span className="text-sm font-bold text-white/70">
             {isTwitter ? 'منشور على X (تويتر)' : 'منشور على فيسبوك'}
           </span>
         </div>
@@ -53,16 +51,16 @@ const PostCard: React.FC<{ post: SocialPost; active: boolean }> = ({ post, activ
           href={post.sourceUrl}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-1.5 text-xs text-white/40 hover:text-gold-400 transition-colors"
+          className="flex items-center gap-1.5 text-xs text-white/35 hover:text-gold-400 transition-colors"
           onClick={e => e.stopPropagation()}
         >
-          <ExternalLink size={12} />
+          <ExternalLink size={11} />
           عرض المنشور
         </a>
       </div>
 
-      {/* Embed content */}
-      <div className="flex-1 flex items-start justify-center overflow-hidden bg-white/[0.03] rounded-b-2xl p-3">
+      {/* Embed area */}
+      <div className="flex-1 flex items-start justify-center bg-white/[0.02] px-4 pt-4 pb-2">
         {active ? (
           isTwitter ? (
             <TwitterEmbed tweetId={tweetId} />
@@ -71,29 +69,32 @@ const PostCard: React.FC<{ post: SocialPost; active: boolean }> = ({ post, activ
               src={post.embedUrl}
               width="500"
               height={post.height}
-              style={{ border: 'none', overflow: 'hidden', maxWidth: '100%' }}
+              style={{ border: 'none', overflow: 'hidden', maxWidth: '100%', width: '100%' }}
               scrolling="no"
               frameBorder="0"
               allowFullScreen
               allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-              className="rounded-lg max-w-full"
+              className="rounded-lg"
             />
           )
         ) : (
-          <div className="w-full h-64 flex items-center justify-center text-white/20 text-sm">
-            {isTwitter ? <Twitter size={32} /> : <Facebook size={32} />}
+          <div
+            className="w-full flex items-center justify-center text-white/10"
+            style={{ height: post.height }}
+          >
+            {isTwitter ? <Twitter size={48} /> : <Facebook size={48} />}
           </div>
         )}
       </div>
 
-      {/* Footer source */}
-      <div className="px-5 py-2.5 flex items-center justify-between border-t border-white/5 mt-1">
-        <span className="text-xs text-white/30">المصدر:</span>
+      {/* Footer */}
+      <div className="px-5 py-3 border-t border-white/5 flex items-center gap-2 mt-auto">
+        <span className="text-xs text-white/25 shrink-0">المصدر:</span>
         <a
           href={post.sourceUrl}
           target="_blank"
           rel="noreferrer"
-          className="text-xs text-gold-500/70 hover:text-gold-400 transition-colors truncate max-w-[260px]"
+          className="text-xs text-gold-500/55 hover:text-gold-400 transition-colors truncate"
           dir="ltr"
         >
           {post.sourceUrl}
@@ -103,11 +104,30 @@ const PostCard: React.FC<{ post: SocialPost; active: boolean }> = ({ post, activ
   );
 };
 
+const GAP = 20;
+const PEEK = 72; // px of adjacent card visible on each side
+
 const SocialPostsSlider: React.FC = () => {
   const [current, setCurrent] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const total = SOCIAL_POSTS.length;
+  const [cardWidth, setCardWidth] = useState(780);
+  const sliderRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const total = SOCIAL_POSTS.length;
+
+  // Compute card width from container
+  useEffect(() => {
+    const update = () => {
+      if (sliderRef.current) {
+        const w = sliderRef.current.offsetWidth;
+        setCardWidth(Math.max(300, w - 2 * (PEEK + GAP)));
+      }
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (sliderRef.current) ro.observe(sliderRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   const next = useCallback(() => setCurrent(p => (p + 1) % total), [total]);
   const prev = useCallback(() => setCurrent(p => (p - 1 + total) % total), [total]);
@@ -124,53 +144,75 @@ const SocialPostsSlider: React.FC = () => {
     timerRef.current = setInterval(next, 6000);
   };
 
+  // translateX: center the current card, let adjacent cards peek
+  const translateX = PEEK + GAP - current * (cardWidth + GAP);
+
   return (
     <div
-      className="relative"
+      className="relative select-none"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      {/* Main slider */}
-      <div className="relative overflow-hidden rounded-2xl">
-        {/* Track */}
+      {/* Counter */}
+      <div className="flex justify-center mb-4">
+        <span
+          className="bg-white/5 border border-white/10 px-4 py-1 rounded-full text-xs text-white/40 font-mono"
+          dir="ltr"
+        >
+          {current + 1} / {total}
+        </span>
+      </div>
+
+      {/* Slider viewport */}
+      <div ref={sliderRef} className="overflow-hidden">
         <div
           className="flex transition-transform duration-700 ease-in-out"
-          style={{ transform: `translateX(${current * 100}%)` }}
+          style={{ gap: `${GAP}px`, transform: `translateX(${translateX}px)` }}
         >
-          {SOCIAL_POSTS.map((post, idx) => (
-            <div
-              key={post.id}
-              className="w-full flex-shrink-0 min-h-[680px] flex flex-col border border-white/10 rounded-2xl bg-slate-900/80 backdrop-blur-sm overflow-hidden"
-            >
-              <PostCard post={post} active={Math.abs(idx - current) <= 1} />
-            </div>
-          ))}
+          {SOCIAL_POSTS.map((post, idx) => {
+            const isActive = idx === current;
+            const isAdjacent = Math.abs(idx - current) === 1;
+            return (
+              <div
+                key={post.id}
+                onClick={() => !isActive && goTo(idx)}
+                style={{ width: `${cardWidth}px`, minWidth: `${cardWidth}px` }}
+                className={`flex-shrink-0 rounded-2xl border overflow-hidden transition-all duration-700 ${
+                  isActive
+                    ? 'border-white/15 opacity-100 scale-100 shadow-2xl cursor-default'
+                    : 'border-white/5 opacity-40 scale-[0.96] cursor-pointer hover:opacity-60'
+                } bg-slate-800/80 backdrop-blur-sm`}
+              >
+                <PostCard post={post} active={isActive || isAdjacent} />
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Prev / Next */}
+      {/* Gradient fade — left */}
+      <div className="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-slate-900 via-slate-900/80 to-transparent pointer-events-none z-10" />
+      {/* Gradient fade — right */}
+      <div className="absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-slate-900 via-slate-900/80 to-transparent pointer-events-none z-10" />
+
+      {/* Prev / Next buttons */}
       <button
         onClick={prev}
-        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-20 w-11 h-11 bg-slate-800/90 hover:bg-gold-500 border border-white/10 hover:border-gold-500 rounded-full flex items-center justify-center text-white transition-all duration-300 shadow-xl"
+        className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-11 h-11 bg-slate-700/80 hover:bg-gold-500 border border-white/10 hover:border-gold-400 rounded-full flex items-center justify-center text-white transition-all duration-300 shadow-xl backdrop-blur-sm"
         aria-label="السابق"
       >
         <ChevronRight size={20} />
       </button>
       <button
         onClick={next}
-        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 w-11 h-11 bg-slate-800/90 hover:bg-gold-500 border border-white/10 hover:border-gold-500 rounded-full flex items-center justify-center text-white transition-all duration-300 shadow-xl"
+        className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-11 h-11 bg-slate-700/80 hover:bg-gold-500 border border-white/10 hover:border-gold-400 rounded-full flex items-center justify-center text-white transition-all duration-300 shadow-xl backdrop-blur-sm"
         aria-label="التالي"
       >
         <ChevronLeft size={20} />
       </button>
 
-      {/* Counter */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-slate-900/70 backdrop-blur-sm border border-white/10 px-3 py-1 rounded-full text-xs text-white/50 font-mono" dir="ltr">
-        {current + 1} / {total}
-      </div>
-
-      {/* Dots pagination */}
-      <div className="flex justify-center gap-2 mt-6 flex-wrap px-4">
+      {/* Dots */}
+      <div className="flex justify-center gap-1.5 mt-6 flex-wrap px-16">
         {SOCIAL_POSTS.map((_, idx) => (
           <button
             key={idx}
@@ -187,21 +229,19 @@ const SocialPostsSlider: React.FC = () => {
 
       {/* Progress bar */}
       {!isPaused && (
-        <div className="mt-3 h-0.5 bg-white/5 rounded-full overflow-hidden mx-auto max-w-sm">
+        <div className="mt-4 h-0.5 bg-white/5 rounded-full overflow-hidden mx-auto max-w-xs">
           <div
+            key={current}
             className="h-full bg-gold-500/60 rounded-full"
-            style={{
-              animation: 'progress-bar 6s linear infinite',
-              animationPlayState: isPaused ? 'paused' : 'running',
-            }}
+            style={{ animation: 'slider-progress 6s linear forwards' }}
           />
         </div>
       )}
 
       <style>{`
-        @keyframes progress-bar {
-          from { width: 0%; }
-          to { width: 100%; }
+        @keyframes slider-progress {
+          from { width: 0% }
+          to   { width: 100% }
         }
       `}</style>
     </div>
