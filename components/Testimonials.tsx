@@ -1,7 +1,8 @@
 
 import React from 'react';
-import { Quote } from 'lucide-react';
+import { Quote, MessageSquare } from 'lucide-react';
 import { Section, Testimonial } from '../types';
+import SocialPostsSlider from './SocialPostsSlider';
 
 export const INITIAL_TESTIMONIALS: Testimonial[] = [
     { id: 1, type: 'text', content: "جميل عزالدين ليس مجرد إعلامي، بل هو جبهة إعلامية بحد ذاته، كلماته رصاصات في صدور الأعداء.", author: "د. محمد العامري", role: "مستشار رئاسي" },
@@ -81,6 +82,29 @@ const Testimonials: React.FC<TestimonialsProps> = ({ items }) => {
             </div>
           ))}
         </div>
+
+        {/* Separator */}
+        <div className="flex items-center gap-6 my-16">
+          <div className="h-px flex-1 bg-gradient-to-l from-gold-500/40 to-transparent"></div>
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full border border-gold-500/20 bg-gold-500/5">
+            <MessageSquare size={14} className="text-gold-500/70" />
+            <span className="text-gold-500/70 text-xs font-bold tracking-widest">منصات التواصل الاجتماعي</span>
+          </div>
+          <div className="h-px flex-1 bg-gradient-to-r from-gold-500/40 to-transparent"></div>
+        </div>
+
+        {/* Social posts sub-section */}
+        <div className="mb-10 text-center">
+          <h3 className="text-2xl md:text-3xl font-heading font-black text-slate-900">
+            آراء ومنشورات من <span className="text-gold-600">منصات التواصل</span>
+          </h3>
+          <p className="text-slate-500 mt-2 text-sm">ما قاله المتابعون والمعجبون على فيسبوك وتويتر</p>
+        </div>
+
+        <div className="bg-slate-900 rounded-3xl p-6 md:p-10 shadow-2xl">
+          <SocialPostsSlider />
+        </div>
+
       </div>
     </section>
   );
