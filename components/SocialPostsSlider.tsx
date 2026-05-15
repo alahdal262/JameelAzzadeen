@@ -119,8 +119,8 @@ const PostCard: React.FC<{ post: SocialPost }> = ({ post }) => {
   );
 };
 
-const GAP = 20;
-const PEEK = 72;
+const GAP = 0;
+const PEEK = 56;
 const AUTOPLAY_MS = 5500;
 const TRANSITION_MS = 700;
 const REWIND_MS = 1100; // slightly longer rewind so it looks intentional
