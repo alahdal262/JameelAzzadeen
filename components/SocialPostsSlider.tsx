@@ -5,57 +5,77 @@ import { SOCIAL_POSTS, SocialPost } from '../data/socialPosts';
 const PostLinkCard: React.FC<{ post: SocialPost }> = ({ post }) => {
   const isTwitter = post.type === 'twitter';
   const color = isTwitter ? '#1DA1F2' : '#1877F2';
-  const label = isTwitter ? 'X (تويتر)' : 'فيسبوك';
   const ctaText = isTwitter ? 'فتح المنشور على X' : 'فتح المنشور على فيسبوك';
-  const handle = isTwitter
-    ? (post.sourceUrl.match(/(?:twitter\.com|x\.com)\/([^/]+)\//)?.[1] || '')
-    : '';
+  const [imgFailed, setImgFailed] = useState(false);
 
   return (
-    <div className="w-full flex flex-col items-center justify-center gap-5 py-10 text-center min-h-[480px] relative">
+    <a
+      href={post.sourceUrl}
+      target="_blank"
+      rel="noreferrer"
+      onClick={e => e.stopPropagation()}
+      className="w-full flex flex-col gap-3 min-h-[520px] group cursor-pointer"
+    >
+      {/* Image */}
+      {post.image && !imgFailed ? (
+        <div className="relative w-full overflow-hidden rounded-xl bg-slate-950 border border-white/10">
+          <img
+            src={post.image}
+            alt={post.title || 'منشور'}
+            onError={() => setImgFailed(true)}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className="w-full h-[320px] object-cover transition-transform duration-700 group-hover:scale-105"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent pointer-events-none"></div>
+          <div
+            className="absolute top-3 left-3 w-9 h-9 rounded-full flex items-center justify-center shadow-lg backdrop-blur-md border"
+            style={{ backgroundColor: `${color}33`, borderColor: `${color}88` }}
+          >
+            {isTwitter ? <Twitter size={16} style={{ color }} /> : <Facebook size={16} style={{ color }} />}
+          </div>
+        </div>
+      ) : (
+        <div
+          className="w-full h-[200px] rounded-xl flex items-center justify-center border-2"
+          style={{
+            background: `linear-gradient(135deg, ${color}1a 0%, ${color}05 100%)`,
+            borderColor: `${color}40`,
+          }}
+        >
+          {isTwitter ? <Twitter size={56} style={{ color }} /> : <Facebook size={56} style={{ color }} />}
+        </div>
+      )}
+
+      {/* Author + text */}
+      <div className="px-1 flex-1 flex flex-col gap-2">
+        {post.title && (
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-black text-white"
+              style={{ background: `linear-gradient(135deg, ${color}, ${color}aa)` }}
+            >
+              {post.title[0] || '?'}
+            </div>
+            <h4 className="text-white font-bold text-base truncate">{post.title}</h4>
+          </div>
+        )}
+        {post.description && (
+          <p className="text-white/75 text-sm leading-relaxed line-clamp-4 whitespace-pre-line">
+            {post.description}
+          </p>
+        )}
+      </div>
+
+      {/* CTA */}
       <div
-        className="w-24 h-24 rounded-full flex items-center justify-center shadow-2xl border-2"
-        style={{
-          background: `linear-gradient(135deg, ${color}40 0%, ${color}10 100%)`,
-          borderColor: `${color}66`,
-        }}
-      >
-        {isTwitter ? <Twitter size={44} style={{ color }} /> : <Facebook size={44} style={{ color }} />}
-      </div>
-
-      <div className="space-y-2 px-4">
-        <h4 className="text-white text-xl md:text-2xl font-bold">
-          منشور على <span style={{ color }}>{label}</span>
-        </h4>
-        <p className="text-white/60 text-sm md:text-base max-w-md leading-relaxed">
-          {isTwitter
-            ? <>منشور رسمي من حساب<span className="text-[#1DA1F2] font-mono mx-1.5" dir="ltr">@{handle}</span>على منصة X</>
-            : <>منشور عام شاركه أحد المتابعين على فيسبوك حول الإعلامي جميل عزّالدين</>
-          }
-        </p>
-      </div>
-
-      <a
-        href={post.sourceUrl}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-white text-sm md:text-base font-bold transition-all shadow-xl hover:shadow-2xl hover:scale-105"
+        className="self-stretch inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full text-white text-sm font-bold transition-all shadow-lg group-hover:shadow-xl group-hover:scale-[1.02]"
         style={{ background: `linear-gradient(to right, ${color}, ${color}cc)` }}
-        onClick={e => e.stopPropagation()}
       >
-        <ExternalLink size={16} />
+        <ExternalLink size={14} />
         {ctaText}
-      </a>
-
-      {/* Decorative pattern */}
-      <div
-        className="absolute inset-0 opacity-[0.04] pointer-events-none rounded-2xl"
-        style={{
-          backgroundImage: `radial-gradient(circle at 30% 20%, ${color} 1px, transparent 1px), radial-gradient(circle at 70% 80%, ${color} 1px, transparent 1px)`,
-          backgroundSize: '40px 40px, 30px 30px',
-        }}
-      ></div>
-    </div>
+      </div>
+    </a>
   );
 };
 

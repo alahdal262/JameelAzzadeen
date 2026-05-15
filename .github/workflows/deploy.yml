@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    # Re-fetch + redeploy daily at 04:00 UTC so Facebook image URLs stay fresh
+    - cron: '0 4 * * *'
 
 permissions:
   contents: read
@@ -27,6 +30,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Refresh social post metadata (OG scrape)
+        run: npm run fetch-social
+        continue-on-error: true
 
       - name: Build
         run: npm run build
