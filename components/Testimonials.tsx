@@ -2,7 +2,6 @@
 import React from 'react';
 import { Quote } from 'lucide-react';
 import { Section, Testimonial } from '../types';
-import { useLanguage } from '../i18n/LanguageContext';
 
 export const INITIAL_TESTIMONIALS: Testimonial[] = [
     { id: 1, type: 'text', content: "جميل عزالدين ليس مجرد إعلامي، بل هو جبهة إعلامية بحد ذاته، كلماته رصاصات في صدور الأعداء.", author: "د. محمد العامري", role: "مستشار رئاسي" },
@@ -18,17 +17,15 @@ interface TestimonialsProps {
 }
 
 const Testimonials: React.FC<TestimonialsProps> = ({ items }) => {
-  const { t } = useLanguage();
   return (
-    <section id={Section.TESTIMONIALS} className="py-24 bg-gradient-to-b from-slate-50 to-white">
+    <section id={Section.TESTIMONIALS} className="py-20 bg-slate-50">
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
-            <span className="text-gold-600 font-bold tracking-widest text-xs uppercase">{t.testimonials.sectionTag}</span>
-            <h2 className="text-3xl md:text-5xl font-heading font-black text-slate-900 mt-3">
-                {t.testimonials.title}
+            <span className="text-gold-600 font-bold tracking-wider text-sm">أرشيف الآراء</span>
+            <h2 className="text-3xl md:text-5xl font-heading font-black text-slate-900 mt-2">
+                ماذا قيل عنه
             </h2>
-            <p className="text-gray-400 mt-3 text-sm">{t.testimonials.subtitle}</p>
-            <div className="w-24 h-1 bg-gradient-to-r from-gold-400 to-amber-500 mx-auto mt-5 rounded-full"></div>
+            <div className="w-24 h-1 bg-gold-500 mx-auto mt-6 rounded-full"></div>
         </div>
 
         <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">

@@ -2,7 +2,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Section, GalleryImage } from '../types';
 import { Maximize2, X, ChevronRight, ChevronLeft } from 'lucide-react';
-import { useLanguage } from '../i18n/LanguageContext';
 
 interface GallerySectionProps {
     images: GalleryImage[];
@@ -16,7 +15,6 @@ const GallerySection: React.FC<GallerySectionProps> = ({ images }) => {
     const [scrollLeft, setScrollLeft] = useState(0);
     const autoScrollPausedRef = useRef(false);
     const pauseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const { t, lang } = useLanguage();
 
     // Triple images for seamless looping in the slider
     const displayImages = [...images, ...images, ...images];
@@ -136,16 +134,11 @@ const GallerySection: React.FC<GallerySectionProps> = ({ images }) => {
             <div className="absolute inset-0 opacity-5 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
 
             <div className="container mx-auto px-4 relative z-10 mb-12 text-center">
-                <span className="text-gold-500 font-bold tracking-wider text-sm uppercase">{t.gallery.sectionTag}</span>
+                <span className="text-gold-500 font-bold tracking-wider text-sm">مكتبة الصور</span>
                 <h2 className="text-3xl md:text-5xl font-heading font-black text-white mt-2">
-                    {lang === 'ar' ? (
-                        <>ذاكرة <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 to-amber-600">فوتوغرافية</span></>
-                    ) : (
-                        <><span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 to-amber-600">Photo</span> Library</>
-                    )}
+                    ذاكرة <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 to-amber-600">فوتوغرافية</span>
                 </h2>
-                <p className="text-gray-400 mt-3 text-sm">{t.gallery.subtitle}</p>
-                <div className="w-24 h-1 bg-gradient-to-r from-gold-400 to-amber-500 mx-auto mt-5 rounded-full"></div>
+                <div className="w-24 h-1 bg-gold-500 mx-auto mt-6 rounded-full"></div>
             </div>
 
             <div className="relative group/slider">

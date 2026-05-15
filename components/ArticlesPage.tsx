@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
-import { ArrowRight, Calendar, User, Clock, X, Share2, ChevronLeft, Newspaper } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { ArrowRight, Calendar, User, Clock, X, Share2, ChevronLeft, Newspaper, Quote, ChevronRight } from 'lucide-react';
+import { motion, useAnimation } from 'motion/react';
 import { Article } from '../types';
-import { useLanguage } from '../i18n/LanguageContext';
 
 interface ArticlesPageProps {
     onBack: () => void;
@@ -11,7 +11,6 @@ interface ArticlesPageProps {
 
 const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
     const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
-    const { t } = useLanguage();
 
     const handleShare = async () => {
         if (!selectedArticle) return;
@@ -56,55 +55,136 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                 {/* Page Title */}
                 <div className="text-center mb-16">
                     <h1 className="text-4xl md:text-5xl font-heading font-bold text-slate-900 mb-4">
-                        مقالات <span className="text-gold-500">ورؤى</span>
+                        المركز <span className="text-gold-500">الإعلامي</span>
                     </h1>
                     <p className="text-gray-600 max-w-2xl mx-auto">
-                        قراءات تحليلية ومواقف وطنية.. هنا تجدون أرشيف مقالات الإعلامي جميل عزالدين، التي توثق مرحلة هامة من تاريخ اليمن.
+                        متابعة مستمرة لأهم المقالات التحليلية والشهادات الوطنية المكتوبة عن مسيرة الإعلامي جميل عزالدين.
                     </p>
                 </div>
 
                 {/* Articles Grid */}
                 {articles.length > 0 ? (
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {articles.map((article) => (
-                            <div 
-                                key={article.id} 
-                                className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 group flex flex-col h-full"
-                            >
-                                <div className="relative h-56 overflow-hidden bg-gray-200">
-                                    <img 
-                                        src={article.image} 
-                                        alt={article.title} 
-                                        className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
-                                        onError={(e) => e.currentTarget.src = 'https://picsum.photos/800/600'}
-                                    />
-                                    <div className="absolute top-4 right-4 bg-gold-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
-                                        {article.category}
-                                    </div>
+                    <div className="space-y-24">
+                        {/* Standard Articles Section */}
+                        {articles.filter(a => a.category !== "ماذا قيل عنه").length > 0 && (
+                            <section>
+                                <div className="flex items-center gap-6 mb-12">
+                                    <h2 className="text-3xl font-heading font-bold text-slate-800 whitespace-nowrap">المقالات والتحليلات</h2>
+                                    <div className="h-px bg-gradient-to-l from-slate-200 to-transparent flex-1"></div>
                                 </div>
-                                <div className="p-6 flex flex-col flex-1">
-                                    <div className="flex items-center gap-2 text-gray-400 text-xs mb-3">
-                                        <Calendar size={12} />
-                                        <span>{article.date}</span>
-                                        <span className="mx-1">•</span>
-                                        <Clock size={12} />
-                                        <span>3 د قراءة</span>
-                                    </div>
-                                    <h3 className="text-xl font-heading font-bold text-slate-900 mb-3 leading-snug group-hover:text-gold-600 transition-colors">
-                                        {article.title}
-                                    </h3>
-                                    <p className="text-gray-600 text-sm leading-relaxed mb-4 line-clamp-3 flex-1">
-                                        {article.excerpt}
-                                    </p>
-                                    <button 
-                                        onClick={() => setSelectedArticle(article)}
-                                        className="mt-auto flex items-center justify-center gap-2 w-full py-3 border border-slate-200 rounded-lg text-slate-700 font-bold text-sm hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all"
-                                    >
-                                        قراءة المقال <ArrowRight size={16} />
-                                    </button>
+                                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                    {articles.filter(a => a.category !== "ماذا قيل عنه").map((article) => (
+                                        <div 
+                                            key={article.id} 
+                                            className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-500 border border-gray-100 group flex flex-col h-full"
+                                        >
+                                            <div className="relative h-56 overflow-hidden bg-gray-200">
+                                                <img 
+                                                    src={article.image} 
+                                                    alt={article.title} 
+                                                    className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700"
+                                                    onError={(e) => e.currentTarget.src = 'https://picsum.photos/800/600'}
+                                                />
+                                                <div className="absolute top-4 right-4 bg-gold-500 text-white text-[10px] uppercase tracking-wider font-bold px-3 py-1 rounded-full shadow-lg">
+                                                    {article.category}
+                                                </div>
+                                            </div>
+                                            <div className="p-7 flex flex-col flex-1">
+                                                <div className="flex items-center gap-2 text-gray-400 text-xs mb-4">
+                                                    <Calendar size={12} className="text-gold-500" />
+                                                    <span>{article.date}</span>
+                                                </div>
+                                                <h3 className="text-xl font-heading font-bold text-slate-900 mb-4 leading-snug group-hover:text-gold-600 transition-colors">
+                                                    {article.title}
+                                                </h3>
+                                                <p className="text-gray-600 text-sm leading-relaxed mb-6 line-clamp-3 flex-1">
+                                                    {article.excerpt}
+                                                </p>
+                                                <button 
+                                                    onClick={() => setSelectedArticle(article)}
+                                                    className="mt-auto flex items-center justify-between w-full p-4 bg-slate-50 rounded-xl text-slate-700 font-bold text-sm group-hover:bg-gold-500 group-hover:text-white transition-all"
+                                                >
+                                                    <span>قراءة التفاصيل</span> 
+                                                    <ArrowRight size={18} className="transform -rotate-180 group-hover:translate-x-[-4px] transition-transform" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
+                            </section>
+                        )}
+
+                        {/* Section Divider/Separator */}
+                        {articles.filter(a => a.category !== "ماذا قيل عنه").length > 0 && articles.filter(a => a.category === "ماذا قيل عنه").length > 0 && (
+                            <div className="flex justify-center items-center gap-8 py-4 opacity-30">
+                                <div className="h-px bg-gradient-to-l from-transparent to-gold-500 flex-1"></div>
+                                <div className="w-2 h-2 rounded-full bg-gold-500 rotate-45"></div>
+                                <div className="h-px bg-gradient-to-r from-transparent to-gold-500 flex-1"></div>
                             </div>
-                        ))}
+                        )}
+
+                        {/* Social Testimonials Slider Section */}
+                        {articles.filter(a => a.category === "ماذا قيل عنه").length > 0 && (
+                            <section className="relative overflow-hidden py-16">
+                                <div className="absolute inset-0 bg-slate-900 -mx-4 md:-mx-12 rounded-[2rem] md:rounded-[4rem] shadow-2xl"></div>
+                                <div className="relative z-10">
+                                    <div className="text-center mb-12">
+                                        <div className="inline-flex items-center justify-center w-16 h-16 bg-white/5 text-gold-500 rounded-2xl mb-4 border border-white/10 backdrop-blur-sm self-center">
+                                            <Quote size={32} fill="currentColor" className="opacity-20" />
+                                        </div>
+                                        <h2 className="text-3xl md:text-4xl font-heading font-bold text-white mb-4">ماذا قيل <span className="text-gold-500">عنه</span></h2>
+                                        <p className="text-slate-400 max-w-xl mx-auto px-4">شهادات وقراءات من زملاء الحرف والكلمة - تمرر من اليسار لليمين</p>
+                                    </div>
+
+                                    {/* Moving Slider Container */}
+                                    <div className="flex overflow-hidden relative group">
+                                        <motion.div 
+                                            className="flex gap-6 px-4"
+                                            animate={{
+                                                x: ["-50%", "0%"]
+                                            }}
+                                            transition={{
+                                                duration: 40,
+                                                ease: "linear",
+                                                repeat: Infinity
+                                            }}
+                                            style={{ width: "fit-content" }}
+                                        >
+                                            {/* Duplicating items for seamless loop */}
+                                            {[...articles.filter(a => a.category === "ماذا قيل عنه"), ...articles.filter(a => a.category === "ماذا قيل عنه")].map((article, idx) => (
+                                                <div 
+                                                    key={`${article.id}-${idx}`} 
+                                                    className="bg-white/5 backdrop-blur-md border border-white/10 p-8 rounded-3xl w-80 shrink-0 flex flex-col h-[400px] hover:border-gold-500/30 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-4 mb-6">
+                                                        <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-gold-500/20">
+                                                            <img src={article.image} alt="User" className="w-full h-full object-cover" />
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="text-white font-bold text-base leading-tight break-words">{article.title.replace('ماذا قيل عنه: ', '').replace(' يتحدث عن جميل عزالدين', '')}</h4>
+                                                            <p className="text-gold-500/70 text-xs mt-1">{article.date}</p>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="relative mb-8 flex-1">
+                                                        <p className="text-slate-300 text-sm italic leading-loose line-clamp-5">
+                                                            "{article.excerpt}"
+                                                        </p>
+                                                    </div>
+                                                    
+                                                    <button 
+                                                        onClick={() => setSelectedArticle(article)}
+                                                        className="mt-auto flex items-center gap-2 text-gold-500 text-sm font-bold w-fit py-2 hover:text-gold-400 transition-all"
+                                                    >
+                                                        قراءة المزيد <ChevronLeft size={16} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </motion.div>
+                                    </div>
+                                </div>
+                            </section>
+                        )}
                     </div>
                 ) : (
                     <div className="text-center py-20 text-gray-400">

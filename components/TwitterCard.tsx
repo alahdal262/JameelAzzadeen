@@ -1,13 +1,11 @@
 
 import React, { useEffect, useState } from 'react';
-import { Twitter, Quote, Heart, Repeat } from 'lucide-react';
+import { Twitter, Quote, Share2, Heart, Repeat } from 'lucide-react';
 import { Section } from '../types';
 import { getLatestTweets } from '../services/geminiService';
-import { useLanguage } from '../i18n/LanguageContext';
 
 const TwitterCard: React.FC = () => {
     const [tweets, setTweets] = useState<string[]>([]);
-    const { t, lang } = useLanguage();
 
     useEffect(() => {
         getLatestTweets().then(setTweets);
@@ -22,20 +20,16 @@ const TwitterCard: React.FC = () => {
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="text-center mb-20">
-            <div className="inline-flex items-center justify-center px-5 py-2.5 bg-slate-800/50 border border-slate-700/60 rounded-full mb-6 backdrop-blur-sm shadow-lg gap-3">
-                <Twitter className="text-[#1DA1F2] w-5 h-5" />
-                <span className="text-white/40">|</span>
-                <span className="text-gold-500 font-bold tracking-wider text-xs uppercase">{t.twitter.sectionTag}</span>
+            <div className="inline-flex items-center justify-center p-4 bg-slate-800/50 border border-slate-700 rounded-full mb-6 backdrop-blur-sm shadow-xl">
+                <Twitter className="text-[#1DA1F2] w-6 h-6" />
+                <span className="mx-3 text-gray-400">|</span>
+                <span className="text-gold-500 font-bold tracking-wider">كلمات خالدة</span>
             </div>
             <h2 className="text-4xl md:text-5xl font-heading font-black text-white leading-tight">
-                {lang === 'ar' ? (
-                    <>من وحي <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#1DA1F2] to-blue-400">اللحظة</span></>
-                ) : (
-                    <>From the <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#1DA1F2] to-blue-400">Moment</span></>
-                )}
+                من وحي <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#1DA1F2] to-blue-400">اللحظة</span>
             </h2>
-            <p className="text-gray-400 mt-4 text-sm max-w-lg mx-auto">
-                {t.twitter.subtitle}
+            <p className="text-gray-400 mt-4 text-lg max-w-2xl mx-auto font-light">
+                مقتطفات وتغريدات تحمل في طياتها حكمة الموقف وبلاغة الكلمة.
             </p>
         </div>
 
@@ -96,20 +90,20 @@ const TwitterCard: React.FC = () => {
                 ))
             ) : (
                 <div className="col-span-full text-center py-20 text-gray-500">
-                    {lang === 'ar' ? 'جاري جلب الحكم والتغريدات...' : 'Loading tweets...'}
+                    جاري جلب الحكم والتغريدات...
                 </div>
             )}
         </div>
 
         <div className="text-center mt-16">
-            <a
-                href="https://twitter.com/gamilaz1"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 px-8 py-3 bg-[#1DA1F2] hover:bg-[#1a91da] text-white font-bold rounded-full transition-all shadow-lg hover:shadow-[#1DA1F2]/30 text-sm"
+            <a 
+                href="https://twitter.com/gamilaz1" 
+                target="_blank" 
+                rel="noreferrer" 
+                className="inline-flex items-center gap-2 px-8 py-3 bg-[#1DA1F2] hover:bg-[#1a91da] text-white font-bold rounded-full transition-all shadow-lg hover:shadow-blue-500/25"
             >
-                <Twitter size={18} />
-                <span>{t.twitter.followBtn}</span>
+                <Twitter size={20} />
+                <span>تابع المزيد من التغريدات</span>
             </a>
         </div>
       </div>
