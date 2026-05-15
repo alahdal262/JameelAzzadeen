@@ -2,34 +2,38 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Facebook, Twitter, ChevronLeft, ChevronRight, ExternalLink, Pause, Play } from 'lucide-react';
 import { SOCIAL_POSTS, SocialPost } from '../data/socialPosts';
 
-const TwitterEmbed: React.FC<{ tweetId: string }> = ({ tweetId }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!ref.current) return;
-    ref.current.innerHTML = '';
-    const anchor = document.createElement('a');
-    anchor.className = 'twitter-tweet';
-    anchor.setAttribute('dir', 'rtl');
-    anchor.setAttribute('data-lang', 'ar');
-    anchor.href = `https://twitter.com/g_khamre/status/${tweetId}`;
-    anchor.textContent = 'Loading tweet...';
-    ref.current.appendChild(anchor);
-    const w = window as any;
-    if (w.twttr?.widgets) {
-      w.twttr.widgets.load(ref.current);
-    } else {
-      const s = document.createElement('script');
-      s.src = 'https://platform.twitter.com/widgets.js';
-      s.async = true;
-      document.head.appendChild(s);
-    }
-  }, [tweetId]);
-  return <div ref={ref} className="w-full flex justify-center py-4" />;
+const TwitterCardLink: React.FC<{ sourceUrl: string }> = ({ sourceUrl }) => {
+  const handle = sourceUrl.match(/(?:twitter\.com|x\.com)\/([^/]+)\//)?.[1] || 'g_khamre';
+  return (
+    <div className="w-full flex flex-col items-center justify-center gap-5 py-10 text-center min-h-[480px]">
+      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#1DA1F2]/30 to-[#1DA1F2]/10 border-2 border-[#1DA1F2]/40 flex items-center justify-center shadow-2xl">
+        <Twitter size={36} className="text-[#1DA1F2]" />
+      </div>
+      <div className="space-y-2">
+        <h4 className="text-white text-xl font-bold">منشور على X (تويتر)</h4>
+        <p className="text-white/60 text-sm max-w-sm leading-relaxed">
+          منشور رسمي من حساب
+          <span className="text-[#1DA1F2] font-mono mx-1.5" dir="ltr">@{handle}</span>
+          على منصة X
+        </p>
+      </div>
+      <a
+        href={sourceUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-[#1DA1F2] to-[#1a91da] hover:from-[#1a91da] hover:to-[#1981c4] text-white text-sm font-bold transition-all shadow-lg hover:shadow-xl hover:scale-105"
+        onClick={e => e.stopPropagation()}
+      >
+        <ExternalLink size={14} />
+        فتح المنشور على X
+      </a>
+      <span className="text-xs text-white/30 font-mono mt-2" dir="ltr">{sourceUrl}</span>
+    </div>
+  );
 };
 
 const PostCard: React.FC<{ post: SocialPost; active: boolean }> = ({ post, active }) => {
   const isTwitter = post.type === 'twitter';
-  const tweetId = isTwitter ? post.embedUrl.replace('twitter:', '') : '';
   const platformColor = isTwitter ? '#1DA1F2' : '#1877F2';
 
   return (
@@ -69,7 +73,7 @@ const PostCard: React.FC<{ post: SocialPost; active: boolean }> = ({ post, activ
       <div className="flex-1 flex items-start justify-center bg-gradient-to-b from-white/[0.03] to-white/[0.01] px-4 pt-4 pb-3">
         {active ? (
           isTwitter ? (
-            <TwitterEmbed tweetId={tweetId} />
+            <TwitterCardLink sourceUrl={post.sourceUrl} />
           ) : (
             <iframe
               src={post.embedUrl}
