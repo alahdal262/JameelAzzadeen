@@ -5,6 +5,7 @@
 import { writeFile } from 'node:fs/promises';
 
 const SOURCES = [
+  // ── original batch ──
   { id: 1,  type: 'facebook', url: 'https://www.facebook.com/share/p/18GvVs4K8V/' },
   { id: 2,  type: 'facebook', url: 'https://www.facebook.com/share/184gm31REJ/' },
   { id: 3,  type: 'twitter',  url: 'https://x.com/g_khamre/status/2050969680458727691' },
@@ -29,6 +30,24 @@ const SOURCES = [
   { id: 22, type: 'facebook', url: 'https://www.facebook.com/share/p/1GQRwLRn3L/' },
   { id: 23, type: 'facebook', url: 'https://www.facebook.com/share/1D2My2SzNj/' },
   { id: 24, type: 'facebook', url: 'https://www.facebook.com/share/p/1apimmLbgC/' },
+  // ── second batch (added 2026-05-16) ──
+  { id: 25, type: 'facebook', url: 'https://www.facebook.com/share/v/1J42npMiKG/' },
+  { id: 26, type: 'facebook', url: 'https://www.facebook.com/share/1CbTUqkrLx/' },
+  { id: 27, type: 'facebook', url: 'https://www.facebook.com/share/1UNtH5URe9/' },
+  { id: 28, type: 'twitter',  url: 'https://x.com/yemenscopsa/status/2017011455686541322' },
+  { id: 29, type: 'twitter',  url: 'https://x.com/yemenp5jq/status/2017033738316660864' },
+  { id: 30, type: 'facebook', url: 'https://www.facebook.com/share/1GZg4QheZ8/' },
+  { id: 31, type: 'twitter',  url: 'https://x.com/albtool_3/status/2023885789713592777' },
+  { id: 32, type: 'twitter',  url: 'https://x.com/holand_ye/status/2036374687127666785' },
+  { id: 33, type: 'twitter',  url: 'https://x.com/drabusaad/status/2036194360027390259' },
+  { id: 34, type: 'twitter',  url: 'https://x.com/salemalsehman/status/2036357614955630893' },
+  { id: 35, type: 'twitter',  url: 'https://x.com/yahyaa12a/status/2036523299291721812' },
+  { id: 36, type: 'twitter',  url: 'https://x.com/a_alomari_0505/status/2036628027103199303' },
+  { id: 37, type: 'twitter',  url: 'https://x.com/n_b52otb/status/2036528386818953389' },
+  { id: 38, type: 'twitter',  url: 'https://x.com/yemenscopsa/status/2036648696381612222' },
+  { id: 39, type: 'twitter',  url: 'https://x.com/ksa2012f/status/2036821280733716816' },
+  { id: 40, type: 'twitter',  url: 'https://x.com/c0olo/status/2037267828928041181' },
+  { id: 41, type: 'facebook', url: 'https://www.facebook.com/1727010673/posts/10203175110575073/' },
 ];
 
 const UA = 'Mozilla/5.0 (compatible; OGScraper/1.0; +https://gamilazzdeen.com)';
@@ -69,14 +88,19 @@ async function fetchAll() {
   for (const s of SOURCES) {
     process.stderr.write(`Fetching #${s.id} (${s.type}) … `);
     if (s.type === 'twitter') {
+      // Extract @username from the URL so each X post is correctly labelled
+      const m = s.url.match(/(?:x|twitter)\.com\/([^/]+)\/status\//);
+      const handle = m ? m[1] : '';
       results.push({
         ...s,
         title: 'منشور على X (تويتر)',
-        description: 'منشور رسمي من حساب @g_khamre على منصة X',
+        description: handle
+          ? `منشور رسمي من حساب @${handle} على منصة X`
+          : 'منشور رسمي على منصة X',
         image: '',
         canonical: s.url,
       });
-      process.stderr.write('twitter (static)\n');
+      process.stderr.write(`twitter (@${handle})\n`);
       continue;
     }
     try {
