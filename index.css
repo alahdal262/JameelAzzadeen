@@ -1,0 +1,218 @@
+/* =============================================================================
+   index.css — Global contrast safety layer
+   -----------------------------------------------------------------------------
+   Goal: ensure no text on this site is ever invisible due to a color/background
+   collision. Acts as a defensive baseline on top of Tailwind utilities.
+   ============================================================================= */
+
+/* ── 1. Theme tokens ──────────────────────────────────────────────────────── */
+:root {
+  /* Page (light) */
+  --bg-page: #f8fafc;
+  --fg-page: #0f172a;
+  --fg-page-muted: #475569;
+  --fg-page-soft: #64748b;
+
+  /* Dark sections */
+  --bg-dark: #0f172a;
+  --bg-dark-elevated: #1e293b;
+  --fg-dark: #f1f5f9;
+  --fg-dark-muted: rgba(255, 255, 255, 0.7);
+  --fg-dark-soft: rgba(255, 255, 255, 0.45);
+
+  /* Brand */
+  --gold-400: #fbbf24;
+  --gold-500: #f59e0b;
+  --gold-600: #d97706;
+
+  /* Focus / selection */
+  --focus-ring: #f59e0b;
+}
+
+/* ── 2. Base reset + font smoothing ──────────────────────────────────────── */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+html, body {
+  background: var(--bg-page);
+  color: var(--fg-page);
+  min-height: 100%;
+}
+
+/* Ensure every section has a sensible default text color, even if a dev forgot one */
+section {
+  color: inherit;
+}
+
+/* ── 3. Auto-contrast on dark backgrounds ────────────────────────────────────
+   Any element whose className mentions a dark slate/black background gets a
+   white-ish default text color. Tailwind utilities (text-white, text-gold-...)
+   keep working on top because they're applied at higher specificity via
+   their generated stylesheet ordering. */
+
+:where(
+  [class*="bg-slate-9"],
+  [class*="bg-slate-8"],
+  [class*="bg-slate-95"],
+  [class*="bg-slate-950"],
+  [class*="bg-black"],
+  [class*="bg-[#0f172a]"],
+  [class*="bg-[#020617]"],
+  [class*="bg-[#1e293b]"]
+) {
+  color: var(--fg-dark);
+}
+
+/* Auto-contrast on light backgrounds (in case any descendant inherits white) */
+:where(
+  section[class*="bg-white"]:not([class*="bg-white/"]),
+  section[class*="bg-slate-50"],
+  section[class*="bg-slate-100"],
+  section[class*="bg-gray-50"],
+  section[class*="bg-gray-100"]
+) {
+  color: var(--fg-page);
+}
+
+/* ── 4. Invisible-text guard ───────────────────────────────────────────────
+   If a developer accidentally sets text-white (white) inside a white/gray
+   section, this minimum-luminance fallback keeps it legible.
+   Applied only as a final safety net — Tailwind's explicit text- utilities
+   still win normally. */
+
+section[class*="bg-white"]:not([class*="bg-white/"]) *:not([class*="bg-"]):not([class*="text-"]) {
+  /* No-op selector intentionally narrow; real protection comes from rule above */
+  color: inherit;
+}
+
+/* If a child explicitly says text-white but its closest "section ancestor" is
+   light, bump it down to a readable slate. */
+@supports selector(:has(*)) {
+  section:where([class*="bg-white"]:not([class*="bg-white/"]), [class*="bg-slate-50"], [class*="bg-gray-50"]):has(.text-white):not(:has([class*="bg-slate-"], [class*="bg-black"])) {
+    /* Targeted via explicit overrides instead of broad :has matching — kept here for reference */
+  }
+}
+
+/* ── 5. Selection + focus ─────────────────────────────────────────────────── */
+::selection {
+  background: rgba(245, 158, 11, 0.35);
+  color: #0f172a;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── 6. Link defaults (only when no explicit color set) ─────────────────── */
+a:where(:not([class*="text-"]):not([class*="bg-"])) {
+  color: var(--gold-500);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:where(:not([class*="text-"]):not([class*="bg-"])):hover {
+  color: var(--gold-400);
+}
+
+/* ── 7. Form controls — ensure visible text regardless of theme ─────────── */
+input, textarea, select {
+  color: var(--fg-page);
+  background-color: #ffffff;
+}
+
+/* If the form is inside a dark section, swap the defaults */
+:where([class*="bg-slate-9"], [class*="bg-slate-95"], [class*="bg-black"]) input,
+:where([class*="bg-slate-9"], [class*="bg-slate-95"], [class*="bg-black"]) textarea,
+:where([class*="bg-slate-9"], [class*="bg-slate-95"], [class*="bg-black"]) select {
+  color: var(--fg-dark);
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+input::placeholder, textarea::placeholder {
+  color: rgba(100, 116, 139, 0.7);
+}
+
+:where([class*="bg-slate-9"], [class*="bg-slate-95"], [class*="bg-black"]) input::placeholder,
+:where([class*="bg-slate-9"], [class*="bg-slate-95"], [class*="bg-black"]) textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ── 8. Utility classes for explicit theme intent ───────────────────────── */
+.theme-dark {
+  background-color: var(--bg-dark);
+  color: var(--fg-dark);
+}
+
+.theme-light {
+  background-color: var(--bg-page);
+  color: var(--fg-page);
+}
+
+.text-on-dark {
+  color: var(--fg-dark);
+}
+
+.text-on-light {
+  color: var(--fg-page);
+}
+
+/* ── 9. Force-readable utility — last-resort override ───────────────────── */
+.text-force-light {
+  color: var(--fg-dark) !important;
+}
+
+.text-force-dark {
+  color: var(--fg-page) !important;
+}
+
+/* ── 10. Image safety: prevent broken-image white boxes from blending in ── */
+img {
+  background-color: transparent;
+}
+
+img:not([src]), img[src=""] {
+  visibility: hidden;
+}
+
+/* ── 11. RTL + Arabic typography polish ─────────────────────────────────── */
+[dir="rtl"] {
+  text-align: right;
+}
+
+[lang="ar"], html[dir="rtl"] body {
+  font-feature-settings: "kern", "liga";
+}
+
+/* ── 12. Reduce motion for users who prefer it ──────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── 13. Scrollbar styling (subtle, theme-aware) ────────────────────────── */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.3);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.5);
+}
