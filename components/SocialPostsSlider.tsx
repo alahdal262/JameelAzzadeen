@@ -34,9 +34,15 @@ const initialFromName = (name: string) => {
   return [...trimmed][0] || '؟';
 };
 
-// Skip posts whose scrape returned no content (likely private). Twitter posts always pass.
-const isPublicPost = (p: SocialPost) =>
-  (p.title && p.title.trim().length > 0) || p.type === 'twitter';
+// Skip posts that are unavailable (deleted, private, or the scraper couldn't read them).
+// `available` is set by the scraper; defaults to true for backwards compatibility.
+// Twitter posts always pass (availability checked client-side by widgets.js).
+type MaybeAvailable = SocialPost & { available?: boolean };
+const isPublicPost = (p: SocialPost) => {
+  const post = p as MaybeAvailable;
+  if (post.available === false) return false;
+  return (p.title && p.title.trim().length > 0) || p.type === 'twitter';
+};
 
 // ─── Shared card chrome (header + footer wrapping) ──────────────────────────
 const CardShell: React.FC<{
@@ -115,7 +121,11 @@ const CardShell: React.FC<{
 );
 
 // ─── Twitter card — uses official widgets.js (lazy) ─────────────────────────
-const TwitterCard: React.FC<{ post: SocialPost; isActive: boolean }> = ({ post, isActive }) => {
+const TwitterCard: React.FC<{
+  post: SocialPost;
+  isActive: boolean;
+  onUnavailable?: (postId: number) => void;
+}> = ({ post, isActive, onUnavailable }) => {
   const tweetId = useMemo(() => extractTweetId(post.sourceUrl), [post.sourceUrl]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [rendered, setRendered] = useState(false);
@@ -124,6 +134,9 @@ const TwitterCard: React.FC<{ post: SocialPost; isActive: boolean }> = ({ post, 
   useEffect(() => {
     if (!isActive || rendered || !tweetId || !containerRef.current) return;
     let cancelled = false;
+    const markUnavailable = () => {
+      if (!cancelled && onUnavailable) onUnavailable(post.id);
+    };
     const tryRender = () => {
       if (cancelled) return;
       if (window.twttr?.widgets?.createTweet && containerRef.current) {
@@ -134,14 +147,22 @@ const TwitterCard: React.FC<{ post: SocialPost; isActive: boolean }> = ({ post, 
           conversation: 'none',
           cards: 'visible',
           align: 'center',
-        }).then(() => { if (!cancelled) setRendered(true); }).catch(() => {});
+        }).then((node) => {
+          if (cancelled) return;
+          // widgets.createTweet resolves with `undefined` when the tweet is deleted/private
+          if (!node) {
+            markUnavailable();
+            return;
+          }
+          setRendered(true);
+        }).catch(() => { markUnavailable(); });
       } else {
         setTimeout(tryRender, 400);
       }
     };
     tryRender();
     return () => { cancelled = true; };
-  }, [isActive, rendered, tweetId]);
+  }, [isActive, rendered, tweetId, onUnavailable, post.id]);
 
   return (
     <CardShell
@@ -302,7 +323,21 @@ const REWIND_MS = 1100;
 const CARD_MIN_HEIGHT = 0; // flexible — cards auto-size to content
 
 const SocialPostsSlider: React.FC = () => {
-  const posts = useMemo(() => SOCIAL_POSTS.filter(isPublicPost), []);
+  // Posts that widgets.js reports as unavailable at runtime (deleted/private X posts)
+  const [runtimeUnavailable, setRuntimeUnavailable] = useState<Set<number>>(new Set());
+  const markUnavailable = useCallback((postId: number) => {
+    setRuntimeUnavailable(prev => {
+      if (prev.has(postId)) return prev;
+      const next = new Set(prev);
+      next.add(postId);
+      return next;
+    });
+  }, []);
+
+  const posts = useMemo(
+    () => SOCIAL_POSTS.filter(p => isPublicPost(p) && !runtimeUnavailable.has(p.id)),
+    [runtimeUnavailable],
+  );
   const total = posts.length;
 
   const [current, setCurrent] = useState(0);
@@ -359,6 +394,11 @@ const SocialPostsSlider: React.FC = () => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isPaused, total]);
 
+  // If a runtime filter removed a post, clamp current index to stay in bounds
+  useEffect(() => {
+    if (current >= total && total > 0) setCurrent(0);
+  }, [current, total]);
+
   const translateX = -current * (cardWidth + GAP);
   const duration = isRewinding ? REWIND_MS : TRANSITION_MS;
 
@@ -374,24 +414,15 @@ const SocialPostsSlider: React.FC = () => {
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      {/* Counter + play/pause */}
-      <div className="flex items-center justify-center gap-3 mb-6">
+      {/* Play/pause control (counter removed) */}
+      <div className="flex items-center justify-center mb-6">
         <button
           onClick={() => setIsPaused(p => !p)}
-          className="w-8 h-8 rounded-full bg-white/5 hover:bg-gold-500/20 border border-white/10 hover:border-gold-500/40 flex items-center justify-center text-white/70 hover:text-gold-300 transition-all"
+          className="w-9 h-9 rounded-full bg-white/5 hover:bg-gold-500/20 border border-white/10 hover:border-gold-500/40 flex items-center justify-center text-white/70 hover:text-gold-300 transition-all"
           aria-label={isPaused ? 'تشغيل' : 'إيقاف'}
         >
-          {isPaused ? <Play size={12} fill="currentColor" /> : <Pause size={12} fill="currentColor" />}
+          {isPaused ? <Play size={13} fill="currentColor" /> : <Pause size={13} fill="currentColor" />}
         </button>
-        <span className="text-white/40 text-xs font-bold tracking-wider">المنشور</span>
-        <span
-          className="bg-gradient-to-br from-gold-500/20 to-gold-600/10 border border-gold-500/30 px-4 py-1.5 rounded-full text-xs text-gold-300 font-mono font-bold shadow-lg"
-          dir="ltr"
-        >
-          <span className="text-white">{String(current + 1).padStart(2, '0')}</span>
-          <span className="text-gold-400/50 mx-1.5">/</span>
-          <span className="text-white/60">{String(total).padStart(2, '0')}</span>
-        </span>
       </div>
 
       {/* Viewport */}
@@ -420,7 +451,7 @@ const SocialPostsSlider: React.FC = () => {
                 dir="rtl"
               >
                 {post.type === 'twitter'
-                  ? <TwitterCard post={post} isActive={isActive || isAdjacent} />
+                  ? <TwitterCard post={post} isActive={isActive || isAdjacent} onUnavailable={markUnavailable} />
                   : <FacebookCard post={post} />}
               </div>
             );

@@ -68,6 +68,17 @@ const extractMeta = (html, prop) => {
   return m ? decodeHtmlEntities(m[1]) : null;
 };
 
+// Known "post unavailable" indicators in Facebook's HTML response
+const UNAVAILABLE_INDICATORS = [
+  'لم يعد متوفر',
+  'لم يعد متوفّر',
+  'content isn\'t available',
+  'content is no longer available',
+  'this content isn\'t available',
+  'this page isn\'t available',
+  'sorry, this content',
+];
+
 async function fetchFacebookPost(url) {
   const res = await fetch(url, {
     redirect: 'follow',
@@ -75,11 +86,18 @@ async function fetchFacebookPost(url) {
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   const html = await res.text();
+  const lowerHtml = html.toLowerCase();
+  const hasUnavailableMarker = UNAVAILABLE_INDICATORS.some(s => lowerHtml.includes(s.toLowerCase()));
+  const title = extractMeta(html, 'og:title') || '';
+  const description = extractMeta(html, 'og:description') || '';
+  // Post is available only if we got meaningful metadata AND no unavailable marker
+  const available = !hasUnavailableMarker && title.trim().length > 0;
   return {
-    title: extractMeta(html, 'og:title') || '',
-    description: extractMeta(html, 'og:description') || '',
+    title,
+    description,
     image: extractMeta(html, 'og:image') || '',
     canonical: extractMeta(html, 'og:url') || url,
+    available,
   };
 }
 
@@ -91,6 +109,7 @@ async function fetchAll() {
       // Extract @username from the URL so each X post is correctly labelled
       const m = s.url.match(/(?:x|twitter)\.com\/([^/]+)\/status\//);
       const handle = m ? m[1] : '';
+      // Twitter availability is checked client-side by widgets.js — assume available here
       results.push({
         ...s,
         title: 'منشور على X (تويتر)',
@@ -99,6 +118,7 @@ async function fetchAll() {
           : 'منشور رسمي على منصة X',
         image: '',
         canonical: s.url,
+        available: true,
       });
       process.stderr.write(`twitter (@${handle})\n`);
       continue;
@@ -106,9 +126,9 @@ async function fetchAll() {
     try {
       const meta = await fetchFacebookPost(s.url);
       results.push({ ...s, ...meta });
-      process.stderr.write(`✓ ${meta.title}\n`);
+      process.stderr.write(`${meta.available ? '✓' : '⊘'} ${meta.title || '(unavailable)'}\n`);
     } catch (e) {
-      results.push({ ...s, title: '', description: '', image: '', canonical: s.url });
+      results.push({ ...s, title: '', description: '', image: '', canonical: s.url, available: false });
       process.stderr.write(`✗ ${e.message}\n`);
     }
     // Gentle pause between requests
@@ -130,6 +150,8 @@ export interface SocialPost {
   title: string;
   description: string;
   image: string;
+  /** false = post deleted, made private, or no longer reachable (auto-detected by scraper) */
+  available: boolean;
 }
 
 export const SOCIAL_POSTS: SocialPost[] = ${JSON.stringify(
@@ -141,6 +163,7 @@ export const SOCIAL_POSTS: SocialPost[] = ${JSON.stringify(
       title: p.title,
       description: p.description,
       image: p.image,
+      available: p.available !== false,
     })),
     null,
     2,
