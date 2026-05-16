@@ -2,141 +2,130 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Facebook, Twitter, ChevronLeft, ChevronRight, ExternalLink, Pause, Play, Quote } from 'lucide-react';
 import { SOCIAL_POSTS, SocialPost } from '../data/socialPosts';
 
-// ─── Embed config ───────────────────────────────────────────────────────────
-const FB_EMBED_WIDTH = 500;   // FB plugin sweet spot
-const FB_EMBED_HEIGHT = 700;  // tall enough for most posts incl. image + text
-
-// X (Twitter) widgets.js — assume already loaded in index.html
+// ─── twttr typings (widgets.js is loaded in index.html) ─────────────────────
 declare global {
   interface Window {
     twttr?: {
       widgets: {
         load: (target?: HTMLElement | null) => void;
-        createTweet?: (id: string, target: HTMLElement, opts?: Record<string, unknown>) => Promise<HTMLElement>;
+        createTweet?: (
+          id: string,
+          target: HTMLElement,
+          opts?: Record<string, unknown>
+        ) => Promise<HTMLElement | undefined>;
       };
     };
   }
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-const buildFbEmbedSrc = (postUrl: string) =>
-  `https://www.facebook.com/plugins/post.php?href=${encodeURIComponent(postUrl)}` +
-  `&show_text=true&width=${FB_EMBED_WIDTH}&appId=&locale=ar_AR`;
+const hostFromUrl = (url: string) => {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+};
 
 const extractTweetId = (url: string): string | null => {
   const m = url.match(/status\/(\d+)/);
   return m ? m[1] : null;
 };
 
-const hostFromUrl = (url: string) => {
-  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+const initialFromName = (name: string) => {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return '؟';
+  return [...trimmed][0] || '؟';
 };
 
-// Filter: skip private/unavailable posts (those the scraper couldn't read → empty title)
+// Skip posts whose scrape returned no content (likely private). Twitter posts always pass.
 const isPublicPost = (p: SocialPost) =>
   (p.title && p.title.trim().length > 0) || p.type === 'twitter';
 
-// ─── Facebook embed card ────────────────────────────────────────────────────
-const FacebookEmbedCard: React.FC<{ post: SocialPost; isActive: boolean }> = ({ post, isActive }) => {
-  // Lazy-mount the iframe only when its slide becomes active (or adjacent),
-  // to avoid 21 FB iframes loading at once on first paint.
-  const [shouldMount, setShouldMount] = useState(false);
-  useEffect(() => {
-    if (isActive && !shouldMount) setShouldMount(true);
-  }, [isActive, shouldMount]);
+// ─── Shared card chrome (header + footer wrapping) ──────────────────────────
+const CardShell: React.FC<{
+  accent: string;
+  platformName: string;
+  PlatformIcon: typeof Facebook;
+  targetUrl: string;
+  children: React.ReactNode;
+}> = ({ accent, platformName, PlatformIcon, targetUrl, children }) => (
+  <article
+    className="relative h-full flex flex-col rounded-3xl overflow-hidden border border-white/10 hover:border-gold-500/40 transition-all duration-500 shadow-[0_25px_80px_-20px_rgba(0,0,0,0.7)]"
+    style={{
+      background:
+        `linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(2,6,23,0.98) 60%, ${accent}10 100%)`,
+    }}
+  >
+    {/* Gold top accent line */}
+    <div className="absolute top-0 left-12 right-12 h-px bg-gradient-to-r from-transparent via-gold-400/60 to-transparent z-10" />
+    {/* Decorative glow blob — top-right */}
+    <div
+      className="absolute -top-24 -right-24 w-72 h-72 rounded-full blur-[110px] opacity-25 pointer-events-none"
+      style={{ background: accent }}
+    />
 
-  const targetUrl = post.canonicalUrl || post.sourceUrl;
-
-  return (
-    <div className="relative bg-slate-900/70 backdrop-blur-sm rounded-3xl overflow-hidden border border-gold-500/20 hover:border-gold-500/50 transition-all duration-500 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6)]">
-      {/* Gold accent strip */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2/3 h-px bg-gradient-to-r from-transparent via-gold-400/70 to-transparent" />
-
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-gradient-to-l from-[#1877F2]/15 via-slate-900/40 to-slate-900/60">
-        <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[#1877F2]/20 border border-[#1877F2]/50 shadow-lg shadow-[#1877F2]/20">
-            <Facebook size={20} className="text-[#1877F2]" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-white font-bold text-sm leading-tight">
-              {post.title || 'منشور على فيسبوك'}
-            </span>
-            <span className="text-white/40 text-[11px] tracking-wider mt-0.5">منشور رسمي من فيسبوك</span>
-          </div>
+    {/* Header (platform only — author appears inside body) */}
+    <header className="relative z-10 flex items-center justify-between px-5 lg:px-6 py-3.5 border-b border-white/10 bg-gradient-to-l from-black/40 via-slate-900/40 to-slate-900/60">
+      <div className="flex items-center gap-3">
+        <div
+          className="w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+          style={{
+            backgroundColor: `${accent}22`,
+            border: `1px solid ${accent}66`,
+          }}
+        >
+          <PlatformIcon size={16} style={{ color: accent }} />
         </div>
-        <a
-          href={targetUrl}
-          target="_blank"
-          rel="noreferrer"
-          onClick={e => e.stopPropagation()}
-          className="hidden sm:inline-flex items-center gap-1.5 text-xs text-white/70 hover:text-gold-300 transition-colors px-3.5 py-2 rounded-full bg-white/[0.04] hover:bg-gold-500/10 border border-white/10 hover:border-gold-500/40 font-bold"
-        >
-          <ExternalLink size={12} />
-          <span>الأصل</span>
-        </a>
+        <div className="flex flex-col">
+          <span className="text-white font-bold text-sm leading-tight">منشور على {platformName}</span>
+          <span className="text-white/40 text-[11px] tracking-wider mt-0.5">منصة التواصل الاجتماعي</span>
+        </div>
       </div>
+      <a
+        href={targetUrl}
+        target="_blank"
+        rel="noreferrer"
+        onClick={e => e.stopPropagation()}
+        className="hidden sm:inline-flex items-center gap-1.5 text-xs text-white/70 hover:text-gold-300 transition-colors px-3 py-1.5 rounded-full bg-white/[0.04] hover:bg-gold-500/10 border border-white/10 hover:border-gold-500/40 font-bold"
+      >
+        <ExternalLink size={11} />
+        <span>الأصل</span>
+      </a>
+    </header>
 
-      {/* Embed body */}
-      <div className="flex justify-center items-start py-6 px-3 bg-gradient-to-b from-white/[0.02] via-transparent to-black/30 min-h-[400px]">
-        {shouldMount ? (
-          <iframe
-            title={`Facebook post — ${post.title || post.id}`}
-            src={buildFbEmbedSrc(targetUrl)}
-            width={FB_EMBED_WIDTH}
-            height={FB_EMBED_HEIGHT}
-            style={{ border: 'none', overflow: 'hidden', maxWidth: '100%', borderRadius: '12px' }}
-            scrolling="no"
-            frameBorder={0}
-            allowFullScreen
-            allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-            loading="lazy"
-          />
-        ) : (
-          <div
-            className="flex items-center justify-center w-full max-w-[500px] rounded-xl border border-white/5 bg-slate-950/40"
-            style={{ height: `${FB_EMBED_HEIGHT}px` }}
-          >
-            <div className="flex flex-col items-center gap-3 text-white/40">
-              <Facebook size={48} className="text-[#1877F2]/40 animate-pulse" />
-              <span className="text-xs font-bold tracking-wider">جاري التحميل…</span>
-            </div>
-          </div>
-        )}
-      </div>
+    {/* Body */}
+    <div className="relative z-10 flex-1 flex flex-col min-h-0">{children}</div>
 
-      {/* Footer — source link */}
-      <div className="px-6 py-3.5 border-t border-white/10 bg-slate-950/50 flex items-center gap-3">
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-gold-300/80 font-bold tracking-wider shrink-0">
-          <Quote size={11} />
-          المصدر
-        </span>
-        <a
-          href={targetUrl}
-          target="_blank"
-          rel="noreferrer"
-          onClick={e => e.stopPropagation()}
-          className="text-xs text-white/55 hover:text-gold-300 transition-colors truncate flex-1 font-mono"
-          dir="ltr"
-        >
-          {hostFromUrl(targetUrl)}
-        </a>
-        <ExternalLink size={11} className="text-white/30 shrink-0" />
-      </div>
+    {/* Source footer */}
+    <div className="relative z-10 px-5 lg:px-6 py-2.5 border-t border-white/10 bg-black/40 backdrop-blur-sm flex items-center gap-3">
+      <span className="inline-flex items-center gap-1.5 text-[10px] text-gold-300/90 font-bold tracking-widest shrink-0 uppercase">
+        <Quote size={10} />
+        المصدر
+      </span>
+      <a
+        href={targetUrl}
+        target="_blank"
+        rel="noreferrer"
+        onClick={e => e.stopPropagation()}
+        className="text-[11px] text-white/55 hover:text-gold-300 transition-colors truncate flex-1 font-mono"
+        dir="ltr"
+      >
+        {hostFromUrl(targetUrl)}
+      </a>
+      <ExternalLink size={11} className="text-white/30 shrink-0" />
     </div>
-  );
-};
+  </article>
+);
 
-// ─── Twitter / X embed card ─────────────────────────────────────────────────
-const TwitterEmbedCard: React.FC<{ post: SocialPost; isActive: boolean }> = ({ post, isActive }) => {
+// ─── Twitter card — uses official widgets.js (lazy) ─────────────────────────
+const TwitterCard: React.FC<{ post: SocialPost; isActive: boolean }> = ({ post, isActive }) => {
   const tweetId = useMemo(() => extractTweetId(post.sourceUrl), [post.sourceUrl]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [rendered, setRendered] = useState(false);
+  const accent = '#1DA1F2';
 
-  // Render the tweet when the card becomes active (lazy) using twttr.widgets.createTweet
   useEffect(() => {
     if (!isActive || rendered || !tweetId || !containerRef.current) return;
+    let cancelled = false;
     const tryRender = () => {
+      if (cancelled) return;
       if (window.twttr?.widgets?.createTweet && containerRef.current) {
         window.twttr.widgets.createTweet(tweetId, containerRef.current, {
           theme: 'dark',
@@ -145,95 +134,184 @@ const TwitterEmbedCard: React.FC<{ post: SocialPost; isActive: boolean }> = ({ p
           conversation: 'none',
           cards: 'visible',
           align: 'center',
-        }).then(() => setRendered(true));
+        }).then(() => { if (!cancelled) setRendered(true); }).catch(() => {});
       } else {
-        // widgets.js still loading; retry
         setTimeout(tryRender, 400);
       }
     };
     tryRender();
+    return () => { cancelled = true; };
   }, [isActive, rendered, tweetId]);
 
   return (
-    <div className="relative bg-slate-900/70 backdrop-blur-sm rounded-3xl overflow-hidden border border-gold-500/20 hover:border-gold-500/50 transition-all duration-500 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6)]">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2/3 h-px bg-gradient-to-r from-transparent via-gold-400/70 to-transparent" />
-
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-gradient-to-l from-[#1DA1F2]/15 via-slate-900/40 to-slate-900/60">
-        <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[#1DA1F2]/20 border border-[#1DA1F2]/50 shadow-lg shadow-[#1DA1F2]/20">
-            <Twitter size={20} className="text-[#1DA1F2]" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-white font-bold text-sm leading-tight">منشور على X (تويتر)</span>
-            <span className="text-white/40 text-[11px] tracking-wider mt-0.5">منشور رسمي من X</span>
-          </div>
-        </div>
-        <a
-          href={post.sourceUrl}
-          target="_blank"
-          rel="noreferrer"
-          onClick={e => e.stopPropagation()}
-          className="hidden sm:inline-flex items-center gap-1.5 text-xs text-white/70 hover:text-gold-300 transition-colors px-3.5 py-2 rounded-full bg-white/[0.04] hover:bg-gold-500/10 border border-white/10 hover:border-gold-500/40 font-bold"
-        >
-          <ExternalLink size={12} />
-          <span>الأصل</span>
-        </a>
-      </div>
-
-      {/* Embed body */}
-      <div className="flex justify-center items-start py-6 px-3 bg-gradient-to-b from-white/[0.02] via-transparent to-black/30 min-h-[400px]">
+    <CardShell
+      accent={accent}
+      platformName="X (تويتر)"
+      PlatformIcon={Twitter}
+      targetUrl={post.sourceUrl}
+    >
+      <div className="flex-1 flex justify-center items-center py-5 px-3 bg-gradient-to-b from-white/[0.02] via-transparent to-black/30">
         <div ref={containerRef} dir="ltr" className="w-full max-w-[550px] flex justify-center">
           {!rendered && (
             <div className="flex flex-col items-center justify-center gap-3 text-white/40 py-20">
-              <Twitter size={48} className="text-[#1DA1F2]/40 animate-pulse" />
+              <Twitter size={48} className="opacity-50" style={{ color: accent }} />
               <span className="text-xs font-bold tracking-wider">جاري التحميل من X…</span>
             </div>
           )}
         </div>
       </div>
+    </CardShell>
+  );
+};
 
-      {/* Footer */}
-      <div className="px-6 py-3.5 border-t border-white/10 bg-slate-950/50 flex items-center gap-3">
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-gold-300/80 font-bold tracking-wider shrink-0">
-          <Quote size={11} />
-          المصدر
-        </span>
-        <a
-          href={post.sourceUrl}
-          target="_blank"
-          rel="noreferrer"
-          onClick={e => e.stopPropagation()}
-          className="text-xs text-white/55 hover:text-gold-300 transition-colors truncate flex-1 font-mono"
-          dir="ltr"
+// ─── Facebook card — text-first, beautifully typeset ────────────────────────
+const FacebookCard: React.FC<{ post: SocialPost }> = ({ post }) => {
+  const accent = '#1877F2';
+  const targetUrl = post.canonicalUrl || post.sourceUrl;
+  const authorName = (post.title || '').trim() || 'منشور على فيسبوك';
+  const excerpt = (post.description || '').trim();
+  const [imgFailed, setImgFailed] = useState(false);
+  const showImage = !!post.image && !imgFailed;
+
+  return (
+    <CardShell
+      accent={accent}
+      platformName="فيسبوك"
+      PlatformIcon={Facebook}
+      targetUrl={targetUrl}
+    >
+      <div className={`flex-1 relative ${showImage ? 'grid grid-cols-1 lg:grid-cols-12 items-stretch' : 'flex flex-col justify-center'}`}>
+        {/* IMAGE COLUMN (right in RTL, top on mobile) */}
+        {showImage && (
+          <div className="lg:col-span-5 relative bg-gradient-to-bl from-slate-950 via-slate-900/80 to-slate-950 flex items-center justify-center p-4 lg:p-5 border-b lg:border-b-0 lg:border-l border-white/[0.06]">
+            <a
+              href={targetUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={e => e.stopPropagation()}
+              className="relative block w-full h-full min-h-[260px] lg:min-h-[420px] overflow-hidden rounded-2xl border border-white/10 shadow-2xl group/img bg-slate-950"
+            >
+              <img
+                src={post.image}
+                alt={`صورة منشور ${authorName}`}
+                referrerPolicy="no-referrer"
+                loading="lazy"
+                onError={() => setImgFailed(true)}
+                className="absolute inset-0 w-full h-full object-contain transition-transform duration-700 group-hover/img:scale-[1.04]"
+                style={{
+                  background:
+                    'radial-gradient(circle at center, rgba(15,23,42,0.4) 0%, rgba(2,6,23,0.9) 100%)',
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/30 via-transparent to-transparent pointer-events-none" />
+              <div
+                className="absolute top-3 right-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md border text-[10px] font-bold text-white shadow-lg"
+                style={{ backgroundColor: `${accent}40`, borderColor: `${accent}88` }}
+              >
+                <Facebook size={10} />
+                <span>صورة المنشور</span>
+              </div>
+            </a>
+          </div>
+        )}
+
+        {/* TEXT COLUMN (left in RTL, bottom on mobile) */}
+        <div
+          className={`${showImage ? 'lg:col-span-7' : ''} flex flex-col justify-center px-6 lg:px-9 py-6 lg:py-7 relative`}
         >
-          {hostFromUrl(post.sourceUrl)}
-        </a>
-        <ExternalLink size={11} className="text-white/30 shrink-0" />
+          {/* Giant decorative quote behind text */}
+          <Quote
+            className="absolute top-4 right-4 w-40 h-40 text-white/[0.03] transform -scale-x-100 pointer-events-none"
+            strokeWidth={1}
+          />
+
+          {/* Author block */}
+          <div className="flex items-center gap-3.5 mb-4 relative z-10">
+            <div
+              className="w-12 h-12 lg:w-[56px] lg:h-[56px] rounded-full flex items-center justify-center shrink-0 text-xl lg:text-2xl font-black text-white shadow-2xl ring-2 ring-white/10"
+              style={{
+                background: `linear-gradient(135deg, ${accent} 0%, ${accent}88 100%)`,
+                boxShadow: `0 10px 30px -8px ${accent}88`,
+              }}
+              aria-hidden="true"
+            >
+              {initialFromName(authorName)}
+            </div>
+            <div className="flex flex-col min-w-0 flex-1">
+              <h3 className="text-white font-heading font-black text-base lg:text-lg leading-tight truncate">
+                {authorName}
+              </h3>
+              <span className="text-white/40 text-[11px] tracking-wider mt-0.5">متابع · فيسبوك</span>
+            </div>
+          </div>
+
+          {/* Subtle divider */}
+          <div className="h-px bg-gradient-to-r from-transparent via-gold-500/25 to-transparent mb-4 relative z-10" />
+
+          {/* Excerpt */}
+          <div className="relative z-10">
+            {excerpt ? (
+              <div className="relative">
+                <Quote
+                  size={18}
+                  className="text-gold-400/70 mb-2 inline-block"
+                  style={{ transform: 'scaleX(-1)' }}
+                  strokeWidth={2.5}
+                />
+                <p className="text-white/90 text-[14.5px] lg:text-[15.5px] leading-[1.9] font-medium whitespace-pre-line">
+                  {excerpt}
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 gap-3 text-white/40">
+                <Facebook size={42} className="opacity-50" style={{ color: accent }} />
+                <span className="text-sm font-bold">منشور على فيسبوك</span>
+                <span className="text-xs text-center max-w-xs">اضغط على الرابط أدناه لقراءته كاملاً</span>
+              </div>
+            )}
+          </div>
+
+          {/* CTA */}
+          <div className="mt-5 relative z-10">
+            <a
+              href={targetUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={e => e.stopPropagation()}
+              className="inline-flex items-center justify-center gap-2.5 px-5 py-2.5 rounded-full text-white text-sm font-bold transition-all shadow-xl hover:shadow-2xl hover:scale-[1.02] active:scale-[0.98]"
+              style={{
+                background: `linear-gradient(to left, ${accent}, ${accent}dd)`,
+                boxShadow: `0 8px 25px -6px ${accent}aa`,
+              }}
+            >
+              <ExternalLink size={14} />
+              <span>قراءة المنشور كاملاً</span>
+            </a>
+          </div>
+        </div>
       </div>
-    </div>
+    </CardShell>
   );
 };
 
 // ─── Slider mechanics ───────────────────────────────────────────────────────
 const GAP = 24;
-const AUTOPLAY_MS = 8500;
+const AUTOPLAY_MS = 7000;
 const TRANSITION_MS = 700;
 const REWIND_MS = 1100;
+const CARD_MIN_HEIGHT = 0; // flexible — cards auto-size to content
 
 const SocialPostsSlider: React.FC = () => {
-  // Filter once: only public posts (those whose scrape returned real data + X posts)
   const posts = useMemo(() => SOCIAL_POSTS.filter(isPublicPost), []);
   const total = posts.length;
 
   const [current, setCurrent] = useState(0);
   const [isRewinding, setIsRewinding] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [cardWidth, setCardWidth] = useState(640);
+  const [cardWidth, setCardWidth] = useState(720);
   const viewportRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Responsive card width
   useEffect(() => {
     const update = () => {
       if (viewportRef.current) {
@@ -263,7 +341,6 @@ const SocialPostsSlider: React.FC = () => {
   const next = useCallback(() => goTo(current + 1), [current, goTo]);
   const prev = useCallback(() => goTo(current - 1), [current, goTo]);
 
-  // Autoplay
   useEffect(() => {
     if (isPaused) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -282,8 +359,6 @@ const SocialPostsSlider: React.FC = () => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isPaused, total]);
 
-  // RTL: positive translateX moves slides to the right; we want next = move to left from viewer perspective
-  // In RTL flex layout, slides naturally lay right-to-left. Translating negative X moves toward the left (next slide enters).
   const translateX = -current * (cardWidth + GAP);
   const duration = isRewinding ? REWIND_MS : TRANSITION_MS;
 
@@ -322,7 +397,7 @@ const SocialPostsSlider: React.FC = () => {
       {/* Viewport */}
       <div ref={viewportRef} className="overflow-hidden px-1">
         <div
-          className="flex"
+          className="flex items-stretch"
           dir="ltr"
           style={{
             gap: `${GAP}px`,
@@ -332,7 +407,6 @@ const SocialPostsSlider: React.FC = () => {
           }}
         >
           {posts.map((post, idx) => {
-            // Mount ±1 around current for smoother UX, others stay placeholder
             const isActive = idx === current;
             const isAdjacent = Math.abs(idx - current) <= 1
               || (current === 0 && idx === total - 1)
@@ -342,12 +416,12 @@ const SocialPostsSlider: React.FC = () => {
               <div
                 key={post.id}
                 style={{ width: `${cardWidth}px`, minWidth: `${cardWidth}px` }}
-                className="flex-shrink-0"
+                className="flex-shrink-0 min-h-[420px]"
                 dir="rtl"
               >
                 {post.type === 'twitter'
-                  ? <TwitterEmbedCard post={post} isActive={isActive || isAdjacent} />
-                  : <FacebookEmbedCard post={post} isActive={isActive || isAdjacent} />}
+                  ? <TwitterCard post={post} isActive={isActive || isAdjacent} />
+                  : <FacebookCard post={post} />}
               </div>
             );
           })}
