@@ -260,13 +260,24 @@ app.use('/api', (_req, res) => {
 
 // --- Static SPA ---------------------------------------------------------------
 
-app.use(express.static(DIST_DIR));
+// Hashed assets are immutable — cache for a year. HTML must always revalidate
+// so a new deploy is picked up immediately (no stale-bundle sessions).
+app.use(express.static(DIST_DIR, {
+  setHeaders(res, filePath) {
+    if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  },
+}));
 
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
   if (!fs.existsSync(INDEX_HTML)) {
     return res.status(404).json({ error: 'not_found' });
   }
+  res.setHeader('Cache-Control', 'no-cache');
   return res.sendFile(INDEX_HTML);
 });
 
