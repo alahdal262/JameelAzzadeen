@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Testimonial, Video, CareerMoment, Article, GalleryImage } from '../../types';
-import { Trash2, Plus, Image as ImageIcon, Type, LogOut, LayoutDashboard, Video as VideoIcon, Quote, Loader2, Sparkles, Cloud, Save, Youtube, RefreshCw, UserCheck, Newspaper, Pencil, Link2, Wand2, Images, UploadCloud, User, Settings, Download, Upload, Database, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { Trash2, Plus, Image as ImageIcon, Type, LogOut, LayoutDashboard, Video as VideoIcon, Quote, Loader2, Sparkles, Cloud, Save, Youtube, RefreshCw, UserCheck, Newspaper, Pencil, Link2, Wand2, Images, UploadCloud, User, Settings, Download, Upload, Database, AlertCircle, CheckCircle2, XCircle, KeyRound } from 'lucide-react';
 import { analyzeImageForTestimonial, expandArticleContent } from '../../services/geminiService';
 import { StorageService } from '../../services/storage';
 
@@ -21,7 +21,7 @@ interface DashboardProps {
     onLogout: () => void;
 }
 
-type Tab = 'testimonials' | 'videos' | 'about' | 'articles' | 'gallery' | 'settings';
+type Tab = 'testimonials' | 'videos' | 'about' | 'articles' | 'gallery' | 'settings' | 'account';
 
 const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMoments, articles, gallery, heroImage, onUpdateTestimonials, onUpdateVideos, onUpdateCareerMoments, onUpdateArticles, onUpdateGallery, onUpdateHeroImage, onLogout }) => {
     const [activeTab, setActiveTab] = useState<Tab>('testimonials');
@@ -68,6 +68,14 @@ const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMomen
 
     // Backup State
     const [isRestoring, setIsRestoring] = useState(false);
+
+    // Account (Login Credentials) State
+    const [accountCurrentPassword, setAccountCurrentPassword] = useState('');
+    const [accountNewEmail, setAccountNewEmail] = useState(StorageService.getCurrentUser()?.email || '');
+    const [accountNewPassword, setAccountNewPassword] = useState('');
+    const [accountConfirmPassword, setAccountConfirmPassword] = useState('');
+    const [isChangingCredentials, setIsChangingCredentials] = useState(false);
+    const [credentialsMessage, setCredentialsMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
     useEffect(() => {
         setTempHeroImage(heroImage);
@@ -505,6 +513,66 @@ const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMomen
         }
     };
 
+    // --- Login Credentials Logic ---
+    const handleChangeCredentials = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setCredentialsMessage(null);
+
+        const currentEmail = (StorageService.getCurrentUser()?.email || '').toLowerCase();
+
+        if (!accountCurrentPassword) {
+            setCredentialsMessage({ type: 'error', text: 'يرجى إدخال كلمة المرور الحالية' });
+            return;
+        }
+
+        const trimmedEmail = accountNewEmail.trim().toLowerCase();
+        const emailChanged = trimmedEmail !== '' && trimmedEmail !== currentEmail;
+        const passwordEntered = accountNewPassword.length > 0;
+
+        if (!emailChanged && !passwordEntered) {
+            setCredentialsMessage({ type: 'error', text: 'لم تغيّر شيئاً' });
+            return;
+        }
+
+        if (emailChanged && !/.+@.+\..+/.test(trimmedEmail)) {
+            setCredentialsMessage({ type: 'error', text: 'البريد الإلكتروني الجديد غير صالح' });
+            return;
+        }
+
+        if (passwordEntered) {
+            if (accountNewPassword.length < 8) {
+                setCredentialsMessage({ type: 'error', text: 'كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل' });
+                return;
+            }
+            if (accountNewPassword !== accountConfirmPassword) {
+                setCredentialsMessage({ type: 'error', text: 'كلمة المرور الجديدة وتأكيدها غير متطابقين' });
+                return;
+            }
+        }
+
+        setIsChangingCredentials(true);
+        try {
+            const result = await StorageService.changeCredentials(
+                accountCurrentPassword,
+                emailChanged ? trimmedEmail : undefined,
+                passwordEntered ? accountNewPassword : undefined
+            );
+            setCredentialsMessage({ type: 'success', text: 'تم تحديث بيانات الدخول بنجاح' });
+            setAccountCurrentPassword('');
+            setAccountNewPassword('');
+            setAccountConfirmPassword('');
+            setAccountNewEmail(result.email);
+        } catch (error: any) {
+            const text =
+                error.message === 'wrong_password' ? 'كلمة المرور الحالية غير صحيحة' :
+                error.message === 'email_taken' ? 'هذا البريد مستخدم مسبقاً' :
+                'حدث خطأ أثناء تحديث البيانات. حاول مرة أخرى.';
+            setCredentialsMessage({ type: 'error', text });
+        } finally {
+            setIsChangingCredentials(false);
+        }
+    };
+
     // --- Backup & Restore Logic ---
     const handleExportBackup = () => {
         const backupData = {
@@ -646,6 +714,7 @@ const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMomen
                     <button onClick={() => setActiveTab('gallery')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'gallery' ? 'bg-amber-600 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><Images size={20} /> المعرض</button>
                     <button onClick={() => setActiveTab('articles')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'articles' ? 'bg-purple-600 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><Newspaper size={20} /> المقالات</button>
                     <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'settings' ? 'bg-slate-700 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><Settings size={20} /> النسخ الاحتياطي</button>
+                    <button onClick={() => setActiveTab('account')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'account' ? 'bg-emerald-600 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><KeyRound size={20} /> حساب الدخول</button>
                 </div>
 
                 <div className="grid lg:grid-cols-3 gap-8">
@@ -653,13 +722,14 @@ const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMomen
                     <div className="lg:col-span-1">
                         <div className="bg-white p-6 rounded-xl shadow-md sticky top-24">
                             <h2 className="text-xl font-bold mb-6 border-b pb-2 flex items-center gap-2">
-                                {activeTab === 'gallery' ? <UploadCloud size={20} className="text-amber-500" /> : <Plus size={20} className={activeTab === 'videos' ? 'text-red-500' : activeTab === 'about' ? 'text-gold-500' : activeTab === 'articles' ? 'text-purple-500' : activeTab === 'settings' ? 'text-slate-500' : 'text-gold-500'} />}
-                                
-                                {activeTab === 'testimonials' ? 'إضافة محتوى جديد' : 
-                                    activeTab === 'videos' ? 'إضافة فيديو جديد' : 
-                                    activeTab === 'about' ? 'إضافة صورة للسيرة' : 
+                                {activeTab === 'gallery' ? <UploadCloud size={20} className="text-amber-500" /> : activeTab === 'account' ? <KeyRound size={20} className="text-emerald-600" /> : <Plus size={20} className={activeTab === 'videos' ? 'text-red-500' : activeTab === 'about' ? 'text-gold-500' : activeTab === 'articles' ? 'text-purple-500' : activeTab === 'settings' ? 'text-slate-500' : 'text-gold-500'} />}
+
+                                {activeTab === 'testimonials' ? 'إضافة محتوى جديد' :
+                                    activeTab === 'videos' ? 'إضافة فيديو جديد' :
+                                    activeTab === 'about' ? 'إضافة صورة للسيرة' :
                                     activeTab === 'gallery' ? 'رفع صور متعددة' :
                                     activeTab === 'settings' ? 'إدارة البيانات' :
+                                    activeTab === 'account' ? 'تغيير بيانات الدخول' :
                                     editingArticleId ? 'تعديل المقال' : 'إضافة مقال جديد'}
                             </h2>
 
@@ -709,6 +779,90 @@ const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMomen
                                         </div>
                                     </div>
                                 </div>
+                            )}
+
+                            {activeTab === 'account' && (
+                                <form onSubmit={handleChangeCredentials} className="space-y-4">
+                                    <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100">
+                                        <p className="text-xs font-bold text-emerald-800 mb-1">البريد الإلكتروني الحالي</p>
+                                        <p className="text-sm font-mono text-emerald-900 bg-white/70 border border-emerald-100 rounded px-2 py-1 text-left" dir="ltr">
+                                            {StorageService.getCurrentUser()?.email || 'غير معروف'}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">كلمة المرور الحالية</label>
+                                        <input
+                                            type="password"
+                                            placeholder="أدخل كلمة المرور الحالية"
+                                            value={accountCurrentPassword}
+                                            onChange={(e) => setAccountCurrentPassword(e.target.value)}
+                                            className="w-full border p-3 rounded-lg"
+                                            autoComplete="current-password"
+                                            required
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني الجديد (اختياري)</label>
+                                        <input
+                                            type="email"
+                                            placeholder="new@email.com"
+                                            value={accountNewEmail}
+                                            onChange={(e) => setAccountNewEmail(e.target.value)}
+                                            className="w-full border p-3 rounded-lg text-left"
+                                            dir="ltr"
+                                            autoComplete="email"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">كلمة المرور الجديدة (اختياري)</label>
+                                        <input
+                                            type="password"
+                                            placeholder="8 أحرف على الأقل"
+                                            value={accountNewPassword}
+                                            onChange={(e) => setAccountNewPassword(e.target.value)}
+                                            className="w-full border p-3 rounded-lg"
+                                            autoComplete="new-password"
+                                            minLength={8}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">تأكيد كلمة المرور الجديدة</label>
+                                        <input
+                                            type="password"
+                                            placeholder="أعد كتابة كلمة المرور الجديدة"
+                                            value={accountConfirmPassword}
+                                            onChange={(e) => setAccountConfirmPassword(e.target.value)}
+                                            className="w-full border p-3 rounded-lg"
+                                            autoComplete="new-password"
+                                            required={accountNewPassword.length > 0}
+                                        />
+                                    </div>
+
+                                    {credentialsMessage && (
+                                        <div className={`p-3 rounded-lg text-sm font-bold flex items-center gap-2 border ${credentialsMessage.type === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                            {credentialsMessage.type === 'success' ? <CheckCircle2 size={16} className="flex-shrink-0" /> : <XCircle size={16} className="flex-shrink-0" />}
+                                            {credentialsMessage.text}
+                                        </div>
+                                    )}
+
+                                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg text-xs text-amber-800 flex items-start gap-2">
+                                        <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                        <p>بعد تغيير بيانات الدخول ستبقى مسجلاً هنا في هذه الجلسة، لكن يجب استخدام البيانات الجديدة عند تسجيل الدخول في المرة القادمة.</p>
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        disabled={isChangingCredentials}
+                                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow-lg shadow-emerald-500/20 disabled:opacity-60 flex items-center justify-center gap-2"
+                                    >
+                                        {isChangingCredentials ? <Loader2 size={18} className="animate-spin" /> : <KeyRound size={18} />}
+                                        {isChangingCredentials ? 'جاري التحديث...' : 'تحديث بيانات الدخول'}
+                                    </button>
+                                </form>
                             )}
 
                             {activeTab === 'about' && (
@@ -1132,6 +1286,12 @@ const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMomen
                         {activeTab === 'settings' && (
                              <div className="text-center py-20 text-gray-400">
                                 استخدم الخيارات في القائمة الجانبية لإدارة البيانات.
+                             </div>
+                        )}
+
+                        {activeTab === 'account' && (
+                             <div className="text-center py-20 text-gray-400">
+                                استخدم النموذج في القائمة الجانبية لتغيير البريد الإلكتروني أو كلمة المرور الخاصة بالدخول.
                              </div>
                         )}
                     </div>

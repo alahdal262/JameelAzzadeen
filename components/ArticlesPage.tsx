@@ -1,9 +1,20 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowRight, Calendar, User, Clock, X, Share2, ChevronLeft, Newspaper, Quote, ChevronRight, Facebook, Twitter, ExternalLink } from 'lucide-react';
-import { motion, useAnimation } from 'motion/react';
+import { ArrowRight, Calendar, X, Share2, ChevronLeft, Newspaper, Quote, Facebook, Twitter, ExternalLink } from 'lucide-react';
+import { motion } from 'motion/react';
 import { Article } from '../types';
 import { SOCIAL_POSTS, SocialPost } from '../data/socialPosts';
+
+const FALLBACK_ARTICLE_IMAGE = 'https://gamilazzdeen.com/wp-content/uploads/2025/12/gamil.png';
+
+// Swap a broken image for the fallback exactly once (prevents an infinite
+// onError loop if the fallback itself fails to load, e.g. offline).
+const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    e.currentTarget.onerror = null;
+    e.currentTarget.src = FALLBACK_ARTICLE_IMAGE;
+};
+
+const QUOTES_CATEGORY = 'ماذا قيل عنه';
 
 interface ArticlesPageProps {
     onBack: () => void;
@@ -110,6 +121,36 @@ const SocialPostArticle: React.FC<{ post: SocialPost; reverse?: boolean }> = ({ 
 
 const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
     const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+    const modalContentRef = useRef<HTMLDivElement>(null);
+
+    const standardArticles = articles.filter(a => a.category !== QUOTES_CATEGORY);
+    const quoteArticles = articles.filter(a => a.category === QUOTES_CATEGORY);
+    // Hide posts the scraper marked as deleted/private (same rule as the home slider).
+    const publicSocialPosts = SOCIAL_POSTS.filter(p => p.available !== false);
+
+    // Modal side effects: render Twitter embeds injected via innerHTML,
+    // lock body scroll, and close on Escape.
+    useEffect(() => {
+        if (!selectedArticle) return;
+
+        const twttr = (window as any).twttr;
+        if (modalContentRef.current && twttr?.widgets?.load) {
+            twttr.widgets.load(modalContentRef.current);
+        }
+
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setSelectedArticle(null);
+        };
+        window.addEventListener('keydown', onKeyDown);
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            window.removeEventListener('keydown', onKeyDown);
+        };
+    }, [selectedArticle]);
 
     const handleShare = async () => {
         if (!selectedArticle) return;
@@ -126,10 +167,16 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
             } catch (err) {
                 console.log('Share canceled');
             }
-        } else {
+        } else if (navigator.clipboard?.writeText) {
             // Fallback for browsers that don't support Web Share API
-            navigator.clipboard.writeText(`${selectedArticle.title}\n${window.location.href}`);
-            alert('تم نسخ رابط الموقع وعنوان المقال إلى الحافظة!');
+            try {
+                await navigator.clipboard.writeText(`${selectedArticle.title}\n${window.location.href}`);
+                alert('تم نسخ رابط الموقع وعنوان المقال إلى الحافظة!');
+            } catch {
+                alert('تعذر نسخ الرابط. يمكنك نسخه يدوياً من شريط العنوان.');
+            }
+        } else {
+            alert('المشاركة غير مدعومة في هذا المتصفح. يمكنك نسخ الرابط من شريط العنوان.');
         }
     };
 
@@ -165,24 +212,25 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                 {articles.length > 0 ? (
                     <div className="space-y-24">
                         {/* Standard Articles Section */}
-                        {articles.filter(a => a.category !== "ماذا قيل عنه").length > 0 && (
+                        {standardArticles.length > 0 && (
                             <section>
                                 <div className="flex items-center gap-6 mb-12">
                                     <h2 className="text-3xl font-heading font-bold text-slate-800 whitespace-nowrap">المقالات والتحليلات</h2>
                                     <div className="h-px bg-gradient-to-l from-slate-200 to-transparent flex-1"></div>
                                 </div>
                                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                    {articles.filter(a => a.category !== "ماذا قيل عنه").map((article) => (
+                                    {standardArticles.map((article) => (
                                         <div 
                                             key={article.id} 
                                             className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-500 border border-gray-100 group flex flex-col h-full"
                                         >
                                             <div className="relative h-56 overflow-hidden bg-gray-200">
-                                                <img 
-                                                    src={article.image} 
-                                                    alt={article.title} 
+                                                <img
+                                                    src={article.image}
+                                                    alt={article.title}
+                                                    loading="lazy"
                                                     className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700"
-                                                    onError={(e) => e.currentTarget.src = 'https://picsum.photos/800/600'}
+                                                    onError={handleImageError}
                                                 />
                                                 <div className="absolute top-4 right-4 bg-gold-500 text-white text-[10px] uppercase tracking-wider font-bold px-3 py-1 rounded-full shadow-lg">
                                                     {article.category}
@@ -214,7 +262,7 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                         )}
 
                         {/* Section Divider/Separator */}
-                        {articles.filter(a => a.category !== "ماذا قيل عنه").length > 0 && articles.filter(a => a.category === "ماذا قيل عنه").length > 0 && (
+                        {standardArticles.length > 0 && quoteArticles.length > 0 && (
                             <div className="flex justify-center items-center gap-8 py-4 opacity-30">
                                 <div className="h-px bg-gradient-to-l from-transparent to-gold-500 flex-1"></div>
                                 <div className="w-2 h-2 rounded-full bg-gold-500 rotate-45"></div>
@@ -223,7 +271,7 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                         )}
 
                         {/* Social Testimonials Slider Section */}
-                        {articles.filter(a => a.category === "ماذا قيل عنه").length > 0 && (
+                        {quoteArticles.length > 0 && (
                             <section className="relative overflow-hidden py-16">
                                 <div className="absolute inset-0 bg-slate-900 -mx-4 md:-mx-12 rounded-[2rem] md:rounded-[4rem] shadow-2xl"></div>
                                 <div className="relative z-10">
@@ -250,14 +298,14 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                                             style={{ width: "fit-content" }}
                                         >
                                             {/* Duplicating items for seamless loop */}
-                                            {[...articles.filter(a => a.category === "ماذا قيل عنه"), ...articles.filter(a => a.category === "ماذا قيل عنه")].map((article, idx) => (
+                                            {[...quoteArticles, ...quoteArticles].map((article, idx) => (
                                                 <div 
                                                     key={`${article.id}-${idx}`} 
                                                     className="bg-white/5 backdrop-blur-md border border-white/10 p-8 rounded-3xl w-80 shrink-0 flex flex-col h-[400px] hover:border-gold-500/30 transition-colors"
                                                 >
                                                     <div className="flex items-center gap-4 mb-6">
                                                         <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-gold-500/20">
-                                                            <img src={article.image} alt="User" className="w-full h-full object-cover" />
+                                                            <img src={article.image} alt={article.title} loading="lazy" onError={handleImageError} className="w-full h-full object-cover" />
                                                         </div>
                                                         <div>
                                                             <h4 className="text-white font-bold text-base leading-tight break-words">{article.title.replace('ماذا قيل عنه: ', '').replace(' يتحدث عن جميل عزالدين', '')}</h4>
@@ -293,7 +341,7 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                 )}
 
                 {/* Social Posts as Articles */}
-                {SOCIAL_POSTS && SOCIAL_POSTS.length > 0 && (
+                {publicSocialPosts.length > 0 && (
                     <section className="mt-24">
                         <div className="flex items-center gap-6 mb-12">
                             <h2 className="text-3xl font-heading font-bold text-slate-800 whitespace-nowrap">
@@ -306,7 +354,7 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                         </p>
 
                         <div className="space-y-12">
-                            {SOCIAL_POSTS.map((post, idx) => <SocialPostArticle key={post.id} post={post} reverse={idx % 2 === 1} />)}
+                            {publicSocialPosts.map((post, idx) => <SocialPostArticle key={post.id} post={post} reverse={idx % 2 === 1} />)}
                         </div>
                     </section>
                 )}
@@ -323,11 +371,11 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                         
                         {/* Modal Header Image */}
                         <div className="relative h-64 md:h-80 w-full">
-                            <img 
-                                src={selectedArticle.image} 
-                                alt={selectedArticle.title} 
+                            <img
+                                src={selectedArticle.image}
+                                alt={selectedArticle.title}
                                 className="w-full h-full object-cover"
-                                onError={(e) => e.currentTarget.src = 'https://picsum.photos/800/600'}
+                                onError={handleImageError}
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent flex flex-col justify-end p-8">
                                 <div className="flex items-center gap-2 text-gold-400 text-sm font-bold mb-2">
@@ -339,8 +387,9 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                                     {selectedArticle.title}
                                 </h2>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => setSelectedArticle(null)}
+                                aria-label="إغلاق المقال"
                                 className="absolute top-4 left-4 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full transition-colors backdrop-blur-sm"
                             >
                                 <X size={24} />
@@ -368,7 +417,14 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                                 </button>
                             </div>
 
-                            <div 
+                            {/*
+                              Article content is intentionally rich HTML: it carries the
+                              Facebook iframe / Twitter blockquote embeds generated in
+                              socialArticles.ts, and is only authored by the authenticated
+                              admin dashboard (never by anonymous visitors).
+                            */}
+                            <div
+                                ref={modalContentRef}
                                 className="prose prose-lg prose-slate max-w-none font-sans"
                                 dangerouslySetInnerHTML={{ __html: selectedArticle.content }}
                             />
