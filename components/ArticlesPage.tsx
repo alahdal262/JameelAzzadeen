@@ -5,7 +5,7 @@ import { motion } from 'motion/react';
 import { Article } from '../types';
 import { SOCIAL_POSTS, SocialPost } from '../data/socialPosts';
 
-const FALLBACK_ARTICLE_IMAGE = 'https://gamilazzdeen.com/wp-content/uploads/2025/12/gamil.png';
+const FALLBACK_ARTICLE_IMAGE = '/gamil.jpg';
 
 // Swap a broken image for the fallback exactly once (prevents an infinite
 // onError loop if the fallback itself fails to load, e.g. offline).
@@ -19,6 +19,12 @@ const QUOTES_CATEGORY = 'ماذا قيل عنه';
 interface ArticlesPageProps {
     onBack: () => void;
     articles: Article[];
+    /** Article id from the /articles/<id> route — the modal is URL-driven. */
+    openArticleId?: string;
+    /** Pushes /articles/<id> (history) — App owns the URL. */
+    onOpenArticle: (articleId: string) => void;
+    /** Returns to /articles (history.back if we pushed, else pushState). */
+    onCloseArticle: () => void;
 }
 
 const SocialPostArticle: React.FC<{ post: SocialPost; reverse?: boolean }> = ({ post, reverse }) => {
@@ -119,8 +125,12 @@ const SocialPostArticle: React.FC<{ post: SocialPost; reverse?: boolean }> = ({ 
     );
 };
 
-const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
-    const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles, openArticleId, onOpenArticle, onCloseArticle }) => {
+    // The open article is derived from the URL (/articles/<id>). An unknown id
+    // simply renders the list with the modal closed — no crash.
+    const selectedArticle: Article | null = openArticleId
+        ? articles.find(a => a.id === openArticleId) ?? null
+        : null;
     const modalContentRef = useRef<HTMLDivElement>(null);
 
     const standardArticles = articles.filter(a => a.category !== QUOTES_CATEGORY);
@@ -142,7 +152,7 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
         document.body.style.overflow = 'hidden';
 
         const onKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setSelectedArticle(null);
+            if (e.key === 'Escape') onCloseArticle();
         };
         window.addEventListener('keydown', onKeyDown);
 
@@ -150,15 +160,18 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
             document.body.style.overflow = previousOverflow;
             window.removeEventListener('keydown', onKeyDown);
         };
-    }, [selectedArticle]);
+    }, [selectedArticle, onCloseArticle]);
 
     const handleShare = async () => {
         if (!selectedArticle) return;
 
+        // Full canonical article URL (deep link to /articles/<id>).
+        const articleUrl = `${window.location.origin}/articles/${selectedArticle.id}`;
+
         const shareData = {
             title: selectedArticle.title,
             text: selectedArticle.excerpt,
-            url: window.location.href // Shares the current site URL
+            url: articleUrl
         };
 
         if (navigator.share) {
@@ -170,8 +183,8 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
         } else if (navigator.clipboard?.writeText) {
             // Fallback for browsers that don't support Web Share API
             try {
-                await navigator.clipboard.writeText(`${selectedArticle.title}\n${window.location.href}`);
-                alert('تم نسخ رابط الموقع وعنوان المقال إلى الحافظة!');
+                await navigator.clipboard.writeText(articleUrl);
+                alert('تم نسخ رابط المقال إلى الحافظة!');
             } catch {
                 alert('تعذر نسخ الرابط. يمكنك نسخه يدوياً من شريط العنوان.');
             }
@@ -247,8 +260,8 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                                                 <p className="text-gray-600 text-sm leading-relaxed mb-6 line-clamp-3 flex-1">
                                                     {article.excerpt}
                                                 </p>
-                                                <button 
-                                                    onClick={() => setSelectedArticle(article)}
+                                                <button
+                                                    onClick={() => onOpenArticle(article.id)}
                                                     className="mt-auto flex items-center justify-between w-full p-4 bg-slate-50 rounded-xl text-slate-700 font-bold text-sm group-hover:bg-gold-500 group-hover:text-white transition-all"
                                                 >
                                                     <span>قراءة التفاصيل</span> 
@@ -319,8 +332,8 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                                                         </p>
                                                     </div>
                                                     
-                                                    <button 
-                                                        onClick={() => setSelectedArticle(article)}
+                                                    <button
+                                                        onClick={() => onOpenArticle(article.id)}
                                                         className="mt-auto flex items-center gap-2 text-gold-500 text-sm font-bold w-fit py-2 hover:text-gold-400 transition-all"
                                                     >
                                                         قراءة المزيد <ChevronLeft size={16} />
@@ -363,9 +376,9 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
             {/* Article Modal */}
             {selectedArticle && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-                    <div 
+                    <div
                         className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm transition-opacity"
-                        onClick={() => setSelectedArticle(null)}
+                        onClick={onCloseArticle}
                     ></div>
                     <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl relative z-10 animate-fade-in-up">
                         
@@ -388,7 +401,7 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                                 </h2>
                             </div>
                             <button
-                                onClick={() => setSelectedArticle(null)}
+                                onClick={onCloseArticle}
                                 aria-label="إغلاق المقال"
                                 className="absolute top-4 left-4 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full transition-colors backdrop-blur-sm"
                             >
@@ -401,7 +414,7 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                             <div className="flex items-center justify-between border-b border-gray-100 pb-6 mb-8">
                                 <div className="flex items-center gap-3">
                                     <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-gold-500">
-                                        <img src="https://gamilazzdeen.com/wp-content/uploads/2025/12/gamil.png" alt="Author" className="w-full h-full object-cover" />
+                                        <img src="/gamil.jpg" alt="Author" className="w-full h-full object-cover" />
                                     </div>
                                     <div>
                                         <p className="font-bold text-slate-900">جميل عزالدين</p>
@@ -430,8 +443,8 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles }) => {
                             />
 
                             <div className="mt-12 pt-8 border-t border-gray-100 text-center">
-                                <button 
-                                    onClick={() => setSelectedArticle(null)}
+                                <button
+                                    onClick={onCloseArticle}
                                     className="px-8 py-3 bg-slate-900 text-white rounded-full font-bold hover:bg-slate-800 transition-colors"
                                 >
                                     إغلاق المقال

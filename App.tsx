@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import AboutSection from './components/AboutSection';
@@ -14,16 +14,176 @@ import LoginPage from './components/admin/LoginPage';
 import Dashboard from './components/admin/Dashboard';
 import { Section, AppView, Testimonial, Video, CareerMoment, Article, GalleryImage } from './types';
 import { StorageService } from './services/storage';
-import { SOCIAL_ARTICLES } from './socialArticles';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
+// ---------------------------------------------------------------------------
+// Routing — History API (pushState) with clean slug paths.
+// URL contract:
+//   /                     home
+//   /<section>            home scrolled to section (about|gallery|videos|twitter|facebook|testimonials)
+//   /articles             blog page
+//   /articles/<id>        blog page with that article open
+//   /login                login (redirects to /dashboard when authenticated)
+//   /dashboard[/<tab>]    admin dashboard (tab slugs: testimonials|videos|about|gallery|articles|backup|account)
+//   anything else         404 view
+// Legacy hashes (#articles/#login/#dashboard/#section-*) and WordPress paths
+// (/category/*, /tag/*) are normalized via history.replaceState.
+// ---------------------------------------------------------------------------
+
+const SECTION_SLUGS = ['about', 'gallery', 'videos', 'twitter', 'facebook', 'testimonials'] as const;
+type SectionSlug = (typeof SECTION_SLUGS)[number];
+
+const DASHBOARD_TAB_SLUGS = ['testimonials', 'videos', 'about', 'gallery', 'articles', 'backup', 'account'] as const;
+
+const SECTION_TITLES: Record<SectionSlug, string> = {
+  about: 'من هو جميل عزالدين',
+  gallery: 'مكتبة الصور',
+  videos: 'فيديوهات',
+  twitter: 'تغريدات',
+  facebook: 'فيسبوك',
+  testimonials: 'قالوا عنه',
+};
+
+const DASHBOARD_TAB_TITLES: Record<string, string> = {
+  testimonials: 'الآراء والصور',
+  videos: 'الفيديوهات',
+  about: 'صور السيرة',
+  gallery: 'المعرض',
+  articles: 'المقالات',
+  backup: 'النسخ الاحتياطي',
+  account: 'حساب الدخول',
+};
+
+const DEFAULT_TITLE = 'جميل عزالدين | الإعلامي والعميد';
+
+interface RouteState {
+  view: AppView;
+  sectionSlug?: SectionSlug;
+  articleId?: string;
+  dashboardTab?: string;
+}
+
+// Malformed percent-encodings must never crash routing.
+const safeDecode = (value: string): string => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+// Map a legacy hash route to its clean-path equivalent (null = not legacy).
+const legacyHashToPath = (hash: string): string | null => {
+  if (hash === '#dashboard') return '/dashboard';
+  if (hash === '#login') return '/login';
+  if (hash === '#articles') return '/articles';
+  if (hash.startsWith('#section-')) {
+    const slug = safeDecode(hash.slice('#section-'.length));
+    return (SECTION_SLUGS as readonly string[]).includes(slug) ? `/${slug}` : '/';
+  }
+  return null;
+};
+
+const parseRoute = (rawPath: string): RouteState => {
+  let path = safeDecode(rawPath || '/');
+  if (!path.startsWith('/')) path = `/${path}`;
+  path = path.replace(/\/+$/, '') || '/'; // strip trailing slashes (keep root)
+
+  if (path === '/') return { view: 'home' };
+
+  const segments = path.slice(1).split('/');
+  const [first, second] = segments;
+
+  if (segments.length === 1 && (SECTION_SLUGS as readonly string[]).includes(first)) {
+    return { view: 'home', sectionSlug: first as SectionSlug };
+  }
+  if (first === 'articles') {
+    if (segments.length === 1) return { view: 'articles' };
+    if (segments.length === 2 && second) return { view: 'articles', articleId: second };
+    return { view: 'notfound' };
+  }
+  if (first === 'login' && segments.length === 1) return { view: 'login' };
+  if (first === 'dashboard') {
+    if (segments.length === 1) return { view: 'dashboard' };
+    if (segments.length === 2 && (DASHBOARD_TAB_SLUGS as readonly string[]).includes(second)) {
+      return { view: 'dashboard', dashboardTab: second };
+    }
+    return { view: 'notfound' };
+  }
+  // Legacy WordPress paths → blog. The server 301s these too; this is the
+  // client-side fallback (e.g. dev server).
+  if (first === 'category' || first === 'tag') return { view: 'articles' };
+
+  return { view: 'notfound' };
+};
+
+// Read the current location, normalizing legacy URLs to clean paths.
+const readLocation = (): RouteState => {
+  const legacyPath = legacyHashToPath(window.location.hash);
+  if (legacyPath) {
+    window.history.replaceState(null, '', legacyPath);
+    return parseRoute(legacyPath);
+  }
+  const decodedPath = safeDecode(window.location.pathname);
+  if (/^\/(category|tag)(\/|$)/.test(decodedPath)) {
+    window.history.replaceState(null, '', '/articles');
+    return { view: 'articles' };
+  }
+  return parseRoute(window.location.pathname);
+};
+
+// ---------------------------------------------------------------------------
+// 404 view — on-brand dark navy/gold design.
+// ---------------------------------------------------------------------------
+const NotFoundView: React.FC<{ onGoHome: () => void; onGoArticles: () => void }> = ({ onGoHome, onGoArticles }) => (
+  <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 relative overflow-hidden" dir="rtl">
+    <div className="absolute -top-24 -right-24 w-96 h-96 bg-gold-500/10 blur-[120px] rounded-full pointer-events-none"></div>
+    <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-gold-500/10 blur-[120px] rounded-full pointer-events-none"></div>
+    <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cube-coat.png')] pointer-events-none"></div>
+
+    <div className="relative z-10 text-center space-y-8 max-w-xl">
+      <div className="inline-block px-4 py-1 bg-gold-500/10 border border-gold-500/30 rounded-full">
+        <span className="text-gold-500 font-bold text-sm">الإعلامي والعميد جميل عزالدين</span>
+      </div>
+      <h1 className="text-8xl md:text-9xl font-heading font-black leading-none text-transparent bg-clip-text bg-gradient-to-b from-gold-400 to-amber-600">
+        ٤٠٤
+      </h1>
+      <div className="space-y-3">
+        <h2 className="text-2xl md:text-3xl font-heading font-bold text-white">الصفحة غير موجودة</h2>
+        <p className="text-gray-400 leading-relaxed">
+          عذراً، الصفحة التي تبحث عنها غير موجودة أو ربما تم نقلها إلى عنوان آخر.
+        </p>
+      </div>
+      <div className="flex flex-wrap justify-center gap-4 pt-2">
+        <button
+          onClick={onGoHome}
+          className="px-8 py-3 bg-gold-500 hover:bg-gold-600 text-slate-900 font-bold rounded-lg transition-all shadow-lg shadow-gold-500/20"
+        >
+          العودة للرئيسية
+        </button>
+        <button
+          onClick={onGoArticles}
+          className="px-8 py-3 border border-gray-600 hover:border-gold-500 text-gray-300 hover:text-gold-500 font-bold rounded-lg transition-all"
+        >
+          تصفح المقالات
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 const App: React.FC = () => {
+  const [route, setRoute] = useState<RouteState>(() => parseRoute(window.location.pathname));
   const [activeSection, setActiveSection] = useState<Section>(Section.HOME);
-  const [currentView, setCurrentView] = useState<AppView>('home');
   const [isAuthenticated, setIsAuthenticated] = useState(() => !!StorageService.getCurrentUser());
   const [isLoading, setIsLoading] = useState(true);
   const [connectionError, setConnectionError] = useState(false);
-  
+
+  // Tracks whether the currently-open article URL was pushed from the list
+  // (so closing can history.back()) or reached by direct load (so closing
+  // pushes /articles instead).
+  const pushedArticleRef = useRef(false);
+
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
   const [careerMoments, setCareerMoments] = useState<CareerMoment[]>([]);
@@ -55,28 +215,13 @@ const App: React.FC = () => {
                   StorageService.getGallery(),
                   StorageService.getHeroImage()
               ]);
-              
+
               setTestimonials(tData);
               setVideos(vData);
               setCareerMoments(cData);
               setArticles(aData);
               setGallery(gData);
               setHeroImage(hImg);
-
-              // One-time sync for social articles if missing.
-              // Non-fatal: persisting requires an authenticated admin session, so for
-              // anonymous visitors we still merge the bundled articles into local state.
-              if (aData.length < 5) { // Assuming if there are very few articles, we need the bulk upload
-                  const hasSocial = aData.some(a => a.id.startsWith('social-art-'));
-                  if (!hasSocial) {
-                      setArticles([...SOCIAL_ARTICLES, ...aData]);
-                      try {
-                          await StorageService.saveArticles([...SOCIAL_ARTICLES, ...aData]);
-                      } catch (syncErr) {
-                          console.warn("Social articles sync skipped (requires admin session):", syncErr);
-                      }
-                  }
-              }
           } catch (e) {
               console.error("Failed to load data", e);
               setConnectionError(true);
@@ -87,47 +232,83 @@ const App: React.FC = () => {
       loadData();
   }, []);
 
-  // Handle Routing
+  // Routing: normalize legacy URLs on mount and react to back/forward.
   useEffect(() => {
-    const handleRouteCheck = () => {
-      const path = window.location.pathname;
-      const hash = window.location.hash;
-      
-      // #dashboard must win over the /login path — otherwise a successful
-      // login at /login re-routes back to the login view forever.
-      if (hash === '#dashboard') {
-        setCurrentView('dashboard');
-      } else if (path === '/login' || hash === '#login') {
-        setCurrentView('login');
-      } else if (hash === '#articles') {
-        setCurrentView('articles');
-      } else {
-        if (path === '/' && !hash) setCurrentView('home');
-        
-        if (hash.startsWith('#section-')) {
-            const sectionId = hash.replace('#section-', '') as Section;
-            if (currentView !== 'home') {
-                setCurrentView('home');
-                setTimeout(() => {
-                    const element = document.getElementById(sectionId);
-                    if (element) element.scrollIntoView({ behavior: 'smooth' });
-                }, 100);
-            } else {
-                 const element = document.getElementById(sectionId);
-                 if (element) element.scrollIntoView({ behavior: 'smooth' });
-            }
-        }
-      }
-    };
-
-    handleRouteCheck();
-    window.addEventListener('popstate', handleRouteCheck);
-    window.addEventListener('hashchange', handleRouteCheck);
+    const onLocationChange = () => setRoute(readLocation());
+    onLocationChange(); // initial parse + legacy-hash normalization (replaceState)
+    window.addEventListener('popstate', onLocationChange);
+    window.addEventListener('hashchange', onLocationChange); // legacy in-page hash links
     return () => {
-        window.removeEventListener('popstate', handleRouteCheck);
-        window.removeEventListener('hashchange', handleRouteCheck);
+      window.removeEventListener('popstate', onLocationChange);
+      window.removeEventListener('hashchange', onLocationChange);
     };
-  }, [currentView]);
+  }, []);
+
+  const navigate = useCallback((path: string) => {
+    if (window.location.pathname + window.location.hash !== path) {
+      window.history.pushState(null, '', path);
+    }
+    setRoute(parseRoute(path));
+  }, []);
+
+  // A logged-in user landing on /login goes straight to /dashboard
+  // (path equivalent of the old "#dashboard wins over /login" rule).
+  useEffect(() => {
+    if (route.view === 'login' && isAuthenticated) {
+      window.history.replaceState(null, '', '/dashboard');
+      setRoute({ view: 'dashboard' });
+    }
+  }, [route, isAuthenticated]);
+
+  // Scroll to the routed section once the home view is rendered,
+  // and keep the Header highlighting in sync.
+  useEffect(() => {
+    if (isLoading || route.view !== 'home') return;
+    if (route.sectionSlug) {
+      setActiveSection(route.sectionSlug as Section);
+      const timer = window.setTimeout(() => {
+        document.getElementById(route.sectionSlug!)?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+      return () => window.clearTimeout(timer);
+    }
+    setActiveSection(Section.HOME);
+  }, [route, isLoading]);
+
+  // Scroll to top when switching to a full-page view.
+  const prevViewRef = useRef<AppView>(route.view);
+  useEffect(() => {
+    if (prevViewRef.current !== route.view) {
+      prevViewRef.current = route.view;
+      if (route.view === 'articles' || route.view === 'notfound') {
+        window.scrollTo(0, 0);
+      }
+    }
+  }, [route.view]);
+
+  // document.title per route.
+  useEffect(() => {
+    let title = DEFAULT_TITLE;
+    switch (route.view) {
+      case 'home':
+        title = route.sectionSlug ? `جميل عزالدين | ${SECTION_TITLES[route.sectionSlug]}` : DEFAULT_TITLE;
+        break;
+      case 'articles': {
+        const article = route.articleId ? articles.find(a => a.id === route.articleId) : undefined;
+        title = article ? `جميل عزالدين | ${article.title}` : 'جميل عزالدين | المقالات';
+        break;
+      }
+      case 'login':
+        title = 'تسجيل الدخول';
+        break;
+      case 'dashboard':
+        title = `لوحة التحكم | ${DASHBOARD_TAB_TITLES[route.dashboardTab ?? DASHBOARD_TAB_SLUGS[0]]}`;
+        break;
+      case 'notfound':
+        title = '٤٠٤ | الصفحة غير موجودة';
+        break;
+    }
+    document.title = title;
+  }, [route, articles]);
 
   // Handle Database Updates
   // CRITICAL FIX: Update State ONLY AFTER StorageService successfully saves
@@ -161,36 +342,52 @@ const App: React.FC = () => {
       setHeroImage(url);
   };
 
-  const scrollToSection = (sectionId: Section) => {
-    if (currentView !== 'home') {
-        setCurrentView('home');
-        setTimeout(() => {
-             const element = document.getElementById(sectionId);
-             if (element) element.scrollIntoView({ behavior: 'smooth' });
-             history.pushState(null, '', `/#section-${sectionId}`);
-        }, 50);
-    } else {
-        const element = document.getElementById(sectionId);
-        if (element) {
-            element.scrollIntoView({ behavior: 'smooth' });
-        }
-        history.pushState(null, '', `/#section-${sectionId}`);
-    }
-    setActiveSection(sectionId);
-  };
-
-  const navigateHome = () => {
-      history.pushState(null, '', '/');
-      setCurrentView('home');
+  const navigateHome = useCallback(() => {
+      navigate('/');
       window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
+  }, [navigate]);
+
+  const navigateToArticles = useCallback(() => {
+      navigate('/articles');
+  }, [navigate]);
+
+  // Section navigation: push the clean slug path; the route effect above
+  // performs the smooth scroll after the home view renders.
+  const scrollToSection = useCallback((sectionId: Section) => {
+    if (sectionId === Section.HOME) {
+        navigateHome();
+        return;
+    }
+    if ((SECTION_SLUGS as readonly string[]).includes(sectionId)) {
+        navigate(`/${sectionId}`);
+    } else {
+        // Sections without a public slug (e.g. contact) just scroll in place.
+        document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' });
+        setActiveSection(sectionId);
+    }
+  }, [navigate, navigateHome]);
+
+  const handleOpenArticle = useCallback((articleId: string) => {
+      pushedArticleRef.current = true;
+      navigate(`/articles/${articleId}`);
+  }, [navigate]);
+
+  const handleCloseArticle = useCallback(() => {
+      if (pushedArticleRef.current) {
+          pushedArticleRef.current = false;
+          window.history.back(); // popstate listener restores /articles
+      } else {
+          // Direct load of /articles/<id>: there is no list entry to go back to.
+          navigate('/articles');
+      }
+  }, [navigate]);
 
   const handleLogin = (success: boolean) => {
       if (success) {
           setIsAuthenticated(true);
-          // normalize away a possible /login path so routing lands on the dashboard
-          window.history.replaceState(null, '', '/#dashboard');
-          setCurrentView('dashboard');
+          // Normalize away the /login path so refresh/back lands on the dashboard.
+          window.history.replaceState(null, '', '/dashboard');
+          setRoute({ view: 'dashboard' });
       }
   };
 
@@ -254,46 +451,55 @@ const App: React.FC = () => {
       );
   }
 
-  if (currentView === 'login') {
+  if (route.view === 'notfound') {
+      return <NotFoundView onGoHome={navigateHome} onGoArticles={navigateToArticles} />;
+  }
+
+  if (route.view === 'login') {
       return <LoginPage onLogin={handleLogin} />;
   }
 
-  if (currentView === 'dashboard') {
+  if (route.view === 'dashboard') {
       if (!isAuthenticated) return <LoginPage onLogin={handleLogin} />;
       return (
-        <Dashboard 
-            testimonials={testimonials} 
+        <Dashboard
+            testimonials={testimonials}
             videos={videos}
             careerMoments={careerMoments}
             articles={articles}
             gallery={gallery}
             heroImage={heroImage}
-            onUpdateTestimonials={handleUpdateTestimonials} 
+            onUpdateTestimonials={handleUpdateTestimonials}
             onUpdateVideos={handleUpdateVideos}
             onUpdateCareerMoments={handleUpdateCareerMoments}
             onUpdateArticles={handleUpdateArticles}
             onUpdateGallery={handleUpdateGallery}
             onUpdateHeroImage={handleUpdateHeroImage}
-            onLogout={handleLogout} 
+            onLogout={handleLogout}
+            initialTab={route.dashboardTab}
+            onTabChange={(slug: string) => {
+                window.history.replaceState(null, '', '/dashboard/' + slug);
+                setRoute({ view: 'dashboard', dashboardTab: slug });
+            }}
         />
       );
   }
 
   return (
     <div className="font-sans text-slate-900 bg-white min-h-screen">
-      <Header 
-        activeSection={activeSection} 
-        activeView={currentView}
-        scrollToSection={scrollToSection} 
+      <Header
+        activeSection={activeSection}
+        activeView={route.view}
+        scrollToSection={scrollToSection}
         onNavigateHome={navigateHome}
       />
-      
+
       <main>
-        {currentView === 'home' ? (
+        {route.view === 'home' ? (
             <>
                 <Hero scrollToSection={scrollToSection} heroImage={heroImage} />
-                <AboutSection 
-                    onNavigateToArticles={() => { window.location.hash = '#articles'; setCurrentView('articles'); }} 
+                <AboutSection
+                    onNavigateToArticles={navigateToArticles}
                     careerMoments={careerMoments}
                 />
                 <GallerySection images={gallery} />
@@ -303,14 +509,17 @@ const App: React.FC = () => {
                 <Testimonials items={testimonials} />
             </>
         ) : (
-            <ArticlesPage 
+            <ArticlesPage
                 articles={articles}
-                onBack={navigateHome} 
+                onBack={navigateHome}
+                openArticleId={route.articleId}
+                onOpenArticle={handleOpenArticle}
+                onCloseArticle={handleCloseArticle}
             />
         )}
       </main>
 
-      <Footer scrollToSection={scrollToSection} />
+      <Footer scrollToSection={scrollToSection} onNavigateToArticles={navigateToArticles} />
     </div>
   );
 };

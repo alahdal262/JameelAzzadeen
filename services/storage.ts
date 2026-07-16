@@ -5,7 +5,7 @@ import { Testimonial, Video, CareerMoment, Article, GalleryImage } from '../type
 // خدمة التخزين — REST API ذاتية الاستضافة (نفس الأصل /api)
 // ---------------------------------------------------------
 
-export const DEFAULT_HERO_IMAGE = "https://gamilazzdeen.com/wp-content/uploads/2025/12/gamil.png";
+export const DEFAULT_HERO_IMAGE = "/gamil.jpg";
 
 const AUTH_STORAGE_KEY = 'jameel_auth';
 
@@ -35,7 +35,16 @@ const apiFetch = async (path: string, options: RequestInit = {}): Promise<Respon
         ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
         ...(options.headers as Record<string, string> | undefined),
     };
-    return fetch(`/api${path}`, { ...options, headers });
+    const res = await fetch(`/api${path}`, { ...options, headers });
+    // Session expiry (7d JWT): a 401 on an authenticated non-login request means
+    // the token is dead — clear it and send the owner back to the login page
+    // instead of letting saves fail with misleading generic errors.
+    if (res.status === 401 && session && !path.startsWith('/auth/login')) {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        window.alert('انتهت صلاحية الجلسة — يرجى تسجيل الدخول من جديد');
+        window.location.assign('/login');
+    }
+    return res;
 };
 
 // --- Generic collection helpers (whitelisted server-side) ---

@@ -19,12 +19,44 @@ interface DashboardProps {
     onUpdateGallery: (items: GalleryImage[]) => Promise<void>;
     onUpdateHeroImage: (url: string) => Promise<void>;
     onLogout: () => void;
+    initialTab?: string;
+    onTabChange?: (slug: string) => void;
 }
 
 type Tab = 'testimonials' | 'videos' | 'about' | 'articles' | 'gallery' | 'settings' | 'account';
 
-const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMoments, articles, gallery, heroImage, onUpdateTestimonials, onUpdateVideos, onUpdateCareerMoments, onUpdateArticles, onUpdateGallery, onUpdateHeroImage, onLogout }) => {
-    const [activeTab, setActiveTab] = useState<Tab>('testimonials');
+// URL slug <-> internal tab mapping ('backup' slug maps to internal 'settings' tab)
+const slugToTab = (slug?: string): Tab => {
+    switch (slug) {
+        case 'testimonials':
+        case 'videos':
+        case 'about':
+        case 'gallery':
+        case 'articles':
+        case 'account':
+            return slug;
+        case 'backup':
+            return 'settings';
+        default:
+            return 'testimonials';
+    }
+};
+
+const tabToSlug = (tab: Tab): string => (tab === 'settings' ? 'backup' : tab);
+
+const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMoments, articles, gallery, heroImage, onUpdateTestimonials, onUpdateVideos, onUpdateCareerMoments, onUpdateArticles, onUpdateGallery, onUpdateHeroImage, onLogout, initialTab, onTabChange }) => {
+    const [activeTab, setActiveTab] = useState<Tab>(() => slugToTab(initialTab));
+
+    // Sync tab state when the initialTab prop changes (e.g. browser back/forward)
+    useEffect(() => {
+        const tab = slugToTab(initialTab);
+        setActiveTab(prev => (prev === tab ? prev : tab));
+    }, [initialTab]);
+
+    const handleTabClick = (tab: Tab) => {
+        setActiveTab(tab);
+        onTabChange?.(tabToSlug(tab));
+    };
     const [isSaving, setIsSaving] = useState(false);
     const [dbStatus, setDbStatus] = useState<{status: 'idle' | 'checking' | 'ok' | 'error', message: string}>({status: 'idle', message: ''});
 
@@ -117,8 +149,9 @@ const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMomen
     };
 
     const compressImage = (base64Str: string, maxWidth = 800): Promise<string> => {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             const img = new Image();
+            img.onerror = () => reject(new Error('تعذر قراءة الصورة — استخدم صيغة JPG أو PNG (صيغة HEIC من الآيفون غير مدعومة)'));
             img.src = base64Str;
             img.onload = () => {
                 const canvas = document.createElement('canvas');
@@ -355,19 +388,28 @@ const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMomen
         
         let videoId = '';
         try {
-            if (videoUrl.includes('v=')) {
-                videoId = videoUrl.split('v=')[1].split('&')[0];
-            } else if (videoUrl.includes('youtu.be/')) {
-                videoId = videoUrl.split('youtu.be/')[1].split('?')[0];
-            } else if (videoUrl.includes('shorts/')) {
-                 videoId = videoUrl.split('shorts/')[1].split('?')[0];
+            const trimmed = videoUrl.trim();
+            if (trimmed.includes('v=')) {
+                videoId = trimmed.split('v=')[1].split('&')[0];
+            } else if (trimmed.includes('youtu.be/')) {
+                videoId = trimmed.split('youtu.be/')[1].split('?')[0];
+            } else if (trimmed.includes('shorts/')) {
+                 videoId = trimmed.split('shorts/')[1].split('?')[0];
+            } else if (trimmed.includes('live/')) {
+                 videoId = trimmed.split('live/')[1].split('?')[0];
+            } else if (trimmed.includes('embed/')) {
+                 videoId = trimmed.split('embed/')[1].split('?')[0];
+            } else if (/^[A-Za-z0-9_-]{11}$/.test(trimmed)) {
+                 videoId = trimmed; // bare video id
             }
         } catch (e) {
             alert('الرابط غير صحيح');
             return;
         }
 
-        if (!videoId) {
+        // A real YouTube id is exactly 11 URL-safe chars — anything else would
+        // publish a dead thumbnail and a broken embed on the public site.
+        if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
             alert('لم يتم التعرف على معرف الفيديو. تأكد من الرابط (YouTube Link).');
             return;
         }
@@ -607,24 +649,28 @@ const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMomen
         reader.onload = async (event) => {
             try {
                 const json = JSON.parse(event.target?.result as string);
-                
-                // Merge Logic: We add imported items to existing ones, avoiding exact ID duplicates if possible,
-                // but usually simpler to just replace or append. Here we will Append/Merge.
-                
+
+                // Merge by id — the backup wins on conflicts. Without dedup,
+                // restoring a recent export doubled every item in the UI.
+                const mergeById = <T extends { id: string | number }>(backup: T[], current: T[]): T[] => {
+                    const seen = new Set(backup.map(i => String(i.id)));
+                    return [...backup, ...current.filter(i => !seen.has(String(i.id)))];
+                };
+
                 if (json.testimonials && Array.isArray(json.testimonials)) {
-                    await onUpdateTestimonials([...json.testimonials, ...testimonials]);
+                    await onUpdateTestimonials(mergeById(json.testimonials, testimonials));
                 }
                 if (json.videos && Array.isArray(json.videos)) {
-                    await onUpdateVideos([...json.videos, ...videos]);
+                    await onUpdateVideos(mergeById(json.videos, videos));
                 }
                 if (json.careerMoments && Array.isArray(json.careerMoments)) {
-                    await onUpdateCareerMoments([...json.careerMoments, ...careerMoments]);
+                    await onUpdateCareerMoments(mergeById(json.careerMoments, careerMoments));
                 }
                 if (json.articles && Array.isArray(json.articles)) {
-                    await onUpdateArticles([...json.articles, ...articles]);
+                    await onUpdateArticles(mergeById(json.articles, articles));
                 }
                 if (json.gallery && Array.isArray(json.gallery)) {
-                    await onUpdateGallery([...json.gallery, ...gallery]);
+                    await onUpdateGallery(mergeById(json.gallery, gallery));
                 }
                 if (json.heroImage) {
                     await onUpdateHeroImage(json.heroImage);
@@ -701,20 +747,20 @@ const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMomen
                             <h3 className="font-bold text-red-800">تنبيه هام جداً: قاعدة البيانات لا تقبل الكتابة!</h3>
                             <p className="text-red-700 text-sm mt-1">{dbStatus.message}</p>
                             <p className="text-red-600 text-xs mt-2">
-                                هذا هو سبب عدم حفظ البيانات. يجب عليك تغيير القواعد في إعدادات Firebase لتقبل الكتابة (allow write: if true).
+                                الخادم أو قاعدة البيانات غير متاحة حالياً — أعد المحاولة بعد قليل، وإن استمرت المشكلة تحقق من حالة الخادم.
                             </p>
                         </div>
                     </div>
                 )}
 
                 <div className="flex gap-4 mb-8 bg-white p-2 rounded-xl shadow-sm max-w-5xl overflow-x-auto">
-                    <button onClick={() => setActiveTab('testimonials')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'testimonials' ? 'bg-slate-900 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><Quote size={20} /> الآراء والصور</button>
-                    <button onClick={() => setActiveTab('videos')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'videos' ? 'bg-red-600 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><VideoIcon size={20} /> الفيديوهات</button>
-                    <button onClick={() => setActiveTab('about')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'about' ? 'bg-gold-500 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><UserCheck size={20} /> صور السيرة</button>
-                    <button onClick={() => setActiveTab('gallery')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'gallery' ? 'bg-amber-600 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><Images size={20} /> المعرض</button>
-                    <button onClick={() => setActiveTab('articles')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'articles' ? 'bg-purple-600 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><Newspaper size={20} /> المقالات</button>
-                    <button onClick={() => setActiveTab('settings')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'settings' ? 'bg-slate-700 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><Settings size={20} /> النسخ الاحتياطي</button>
-                    <button onClick={() => setActiveTab('account')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'account' ? 'bg-emerald-600 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><KeyRound size={20} /> حساب الدخول</button>
+                    <button onClick={() => handleTabClick('testimonials')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'testimonials' ? 'bg-slate-900 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><Quote size={20} /> الآراء والصور</button>
+                    <button onClick={() => handleTabClick('videos')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'videos' ? 'bg-red-600 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><VideoIcon size={20} /> الفيديوهات</button>
+                    <button onClick={() => handleTabClick('about')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'about' ? 'bg-gold-500 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><UserCheck size={20} /> صور السيرة</button>
+                    <button onClick={() => handleTabClick('gallery')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'gallery' ? 'bg-amber-600 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><Images size={20} /> المعرض</button>
+                    <button onClick={() => handleTabClick('articles')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'articles' ? 'bg-purple-600 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><Newspaper size={20} /> المقالات</button>
+                    <button onClick={() => handleTabClick('settings')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'settings' ? 'bg-slate-700 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><Settings size={20} /> النسخ الاحتياطي</button>
+                    <button onClick={() => handleTabClick('account')} className={`flex-1 py-3 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[140px] ${activeTab === 'account' ? 'bg-emerald-600 text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}><KeyRound size={20} /> حساب الدخول</button>
                 </div>
 
                 <div className="grid lg:grid-cols-3 gap-8">
@@ -1009,7 +1055,7 @@ const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMomen
                                                 onChange={(e) => setChannelId(e.target.value)} 
                                                 className="w-full border p-3 rounded-lg text-left dir-ltr mb-3 font-mono text-sm" 
                                             />
-                                            <button onClick={handleSaveChannelId} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2">
+                                            <button type="button" onClick={handleSaveChannelId} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2">
                                                 <RefreshCw size={18} />
                                                 حفظ وربط
                                             </button>

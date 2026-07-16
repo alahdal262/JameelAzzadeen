@@ -22,11 +22,12 @@ const Header: React.FC<HeaderProps> = ({ activeSection, activeView, scrollToSect
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // scrollToSection pushes the clean slug path (e.g. /about) and App handles
+  // switching back to the home view + smooth scrolling, so no special-casing
+  // is needed for the articles view anymore.
   const handleNavClick = (sectionId: Section) => {
-    if (activeView === 'articles') {
+    if (sectionId === Section.HOME) {
         onNavigateHome();
-        // Allow a small delay for page switch before scrolling
-        setTimeout(() => scrollToSection(sectionId), 100);
     } else {
         scrollToSection(sectionId);
     }
