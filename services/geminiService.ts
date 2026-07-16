@@ -1,10 +1,16 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
+// The key is baked in at build time; when absent every AI feature must fall
+// back to curated static content WITHOUT attempting a network call.
+const API_KEY = ((process.env.API_KEY as string) || '').trim();
+export const AI_ENABLED = API_KEY.length > 0;
+
 // Fallback content if API key is missing
 export const FALLBACK_BIO = `قامة إعلامية يمنية شامخة، وصوت وطني بليغ رَسَخَ مكانته كأحد أبرز الإعلاميين في اليمن. تميز بفصاحته المتقدة وقدرته الفريدة على استنطاق الحقائق، مدافعًا عن قضايا وطنه وشعبه بكل شجاعة واقتدار. مسيرته المهنية محفورة كنموذج ملهم للعطاء والتفاني في خدمة الإعلام الهادف، تاركًا بصمة خالدة في الوعي الوطني.`;
 
 export const getBio = async (): Promise<string> => {
+  if (!AI_ENABLED) return FALLBACK_BIO;
   try {
     // Fixed: Initializing GoogleGenAI with process.env.API_KEY directly and using gemini-3-flash-preview
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
@@ -28,6 +34,7 @@ export const getLatestTweets = async (): Promise<string[]> => {
     "سبتمبر هو الميلاد الحقيقي لليمن الجديد، ولن تعود عجلة التاريخ للوراء.",
     "الإعلام الوطني هو الجبهة التي لا تقل أهمية عن المعركة العسكرية."
   ];
+  if (!AI_ENABLED) return fallbackTweets;
 
   try {
     // Fixed: Initializing GoogleGenAI with process.env.API_KEY directly and using gemini-3-flash-preview
@@ -61,6 +68,9 @@ export const getLatestTweetContent = async (): Promise<string> => {
 }
 
 export const analyzeImageForTestimonial = async (base64Image: string): Promise<{content: string, author: string, role: string}> => {
+  if (!AI_ENABLED) {
+    throw new Error('ميزة الذكاء الاصطناعي غير مفعّلة — أضف GEMINI_API_KEY في إعدادات الخادم ثم أعد البناء');
+  }
   try {
     // Fixed: Initializing GoogleGenAI with process.env.API_KEY directly and using gemini-3-flash-preview
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
@@ -112,6 +122,9 @@ export const analyzeImageForTestimonial = async (base64Image: string): Promise<{
 };
 
 export const expandArticleContent = async (title: string, brief: string): Promise<string> => {
+  if (!AI_ENABLED) {
+    throw new Error('ميزة الذكاء الاصطناعي غير مفعّلة — أضف GEMINI_API_KEY في إعدادات الخادم ثم أعد البناء');
+  }
   try {
     // Fixed: Initializing GoogleGenAI with process.env.API_KEY directly and using gemini-3-pro-preview for advanced text generation
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });

@@ -53,7 +53,7 @@ const TwitterCard: React.FC = () => {
                         <div className="relative z-10 h-full flex flex-col">
                             <div className="flex items-center gap-3 mb-6">
                                 <img 
-                                    src="https://gamilazzdeen.com/wp-content/uploads/2025/12/gamil.png" 
+                                    src="/gamil.jpg" 
                                     alt="Profile" 
                                     className="w-10 h-10 rounded-full border border-gold-500/30 p-0.5"
                                 />

@@ -332,6 +332,28 @@ app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'not_found' });
 });
 
+// --- Legacy WordPress paths -> 301 /articles -----------------------------------
+
+// Old WordPress permalinks (/category/<x>, /tag/<x>) permanently redirect to the
+// blog page. Decoding is wrapped in try/catch: a malformed percent sequence
+// (e.g. /category/%zz) must not crash — it falls through to the SPA 404 below.
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  let decoded;
+  try {
+    decoded = decodeURIComponent(req.path);
+  } catch {
+    return next();
+  }
+  if (
+    decoded === '/category' || decoded.startsWith('/category/') ||
+    decoded === '/tag' || decoded.startsWith('/tag/')
+  ) {
+    return res.redirect(301, '/articles');
+  }
+  return next();
+});
+
 // --- Static SPA ---------------------------------------------------------------
 
 // Hashed assets are immutable — cache for a year. HTML must always revalidate
@@ -346,13 +368,49 @@ app.use(express.static(DIST_DIR, {
   },
 }));
 
-app.get('*', (req, res, next) => {
+// SPA fallback with a route whitelist: known app paths get index.html with 200;
+// anything else (e.g. /wp-admin, /xmlrpc.php, /foo) still gets index.html — the
+// SPA renders its 404 view — but with an HTTP 404 status so crawlers don't index
+// junk URLs. /api/* was already handled above and keeps its JSON 404.
+const KNOWN_APP_PATHS = new Set([
+  '/',
+  '/about',
+  '/gallery',
+  '/videos',
+  '/twitter',
+  '/facebook',
+  '/testimonials',
+  '/articles',
+  '/login',
+  '/dashboard',
+]);
+
+function isKnownAppPath(pathname) {
+  return (
+    KNOWN_APP_PATHS.has(pathname) ||
+    pathname.startsWith('/articles/') ||
+    pathname.startsWith('/dashboard/')
+  );
+}
+
+// Plain middleware (NOT app.get('*')): Express decodes wildcard params itself
+// and a malformed percent sequence like /category/%zz would throw a URIError
+// before our handler runs. A bare middleware sees the raw path and stays safe.
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
   if (req.path.startsWith('/api/')) return next();
   if (!fs.existsSync(INDEX_HTML)) {
     return res.status(404).json({ error: 'not_found' });
   }
+  let pathname = req.path;
+  try {
+    pathname = decodeURIComponent(pathname);
+  } catch {
+    // Malformed percent sequence: keep the raw path, which will not match the
+    // whitelist and therefore serves the SPA 404 view.
+  }
   res.setHeader('Cache-Control', 'no-cache');
-  return res.sendFile(INDEX_HTML);
+  return res.status(isKnownAppPath(pathname) ? 200 : 404).sendFile(INDEX_HTML);
 });
 
 // --- Error handling -------------------------------------------------------------

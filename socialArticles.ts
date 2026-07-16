@@ -87,7 +87,7 @@ export const SOCIAL_ARTICLES: Article[] = links.map((link, index) => {
         excerpt: excerpt,
         content: isTwitter ? twitterEmbed(link) : facebookEmbed(link),
         date: index % 2 === 0 ? "مايو 2026" : "ديسمبر 2025",
-        image: "https://gamilazzdeen.com/wp-content/uploads/2025/12/gamil.png",
+        image: "/gamil.jpg",
         category: "ماذا قيل عنه"
     };
 });

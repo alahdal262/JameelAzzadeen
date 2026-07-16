@@ -45,7 +45,7 @@ const FacebookSection: React.FC = () => {
               {/* Post Header */}
               <div className="p-4 flex items-center gap-3">
                 <img 
-                  src="https://gamilazzdeen.com/wp-content/uploads/2025/12/gamil.png" 
+                  src="/gamil.jpg" 
                   alt="Profile" 
                   className="w-10 h-10 rounded-full object-cover ring-2 ring-gray-100"
                 />

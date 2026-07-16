@@ -57,7 +57,7 @@ export interface GalleryImage {
   date: string;
 }
 
-export type AppView = 'home' | 'articles' | 'login' | 'dashboard';
+export type AppView = 'home' | 'articles' | 'login' | 'dashboard' | 'notfound';
 
 export enum Section {
   HOME = 'home',

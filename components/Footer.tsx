@@ -5,9 +5,10 @@ import { Section } from '../types';
 
 interface FooterProps {
     scrollToSection: (section: Section) => void;
+    onNavigateToArticles: () => void;
 }
 
-const Footer: React.FC<FooterProps> = ({ scrollToSection }) => {
+const Footer: React.FC<FooterProps> = ({ scrollToSection, onNavigateToArticles }) => {
   return (
     <footer className="bg-slate-950 text-white pt-20 pb-8 border-t border-slate-800">
       <div className="container mx-auto px-4">
@@ -41,7 +42,7 @@ const Footer: React.FC<FooterProps> = ({ scrollToSection }) => {
                 <li><button onClick={() => scrollToSection(Section.ABOUT)} className="hover:text-gold-500 transition-colors">من هو جميل عزالدين</button></li>
                 <li><button onClick={() => scrollToSection(Section.GALLERY)} className="hover:text-gold-500 transition-colors">مكتبة الصور</button></li>
                 <li><button onClick={() => scrollToSection(Section.VIDEOS)} className="hover:text-gold-500 transition-colors">مكتبة الفيديو</button></li>
-                <li><a href="https://gamilazzdeen.com/category/%d9%85%d9%82%d8%a7%d9%84%d8%a7%d8%aa" target="_blank" rel="noreferrer" className="hover:text-gold-500 transition-colors">المقالات</a></li>
+                <li><button onClick={onNavigateToArticles} className="hover:text-gold-500 transition-colors">المقالات</button></li>
                 <li><button onClick={() => scrollToSection(Section.TESTIMONIALS)} className="hover:text-gold-500 transition-colors">ماذا قيل عنه</button></li>
              </ul>
            </div>
