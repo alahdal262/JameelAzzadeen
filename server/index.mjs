@@ -72,18 +72,23 @@ async function initSchema() {
 }
 
 async function seedAdmin() {
+  // Seed from env ONLY when the admins table is empty. Never overwrite
+  // credentials that were changed via the dashboard.
+  const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM admins');
+  if (rows[0].count > 0) {
+    console.log('[admin] admins exist; env seed skipped');
+    return;
+  }
   if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
     console.warn('[admin] ADMIN_EMAIL/ADMIN_PASSWORD not set; skipping admin seed');
     return;
   }
   const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
   await pool.query(
-    `INSERT INTO admins (email, password_hash)
-     VALUES ($1, $2)
-     ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
+    'INSERT INTO admins (email, password_hash) VALUES ($1, $2)',
     [ADMIN_EMAIL.toLowerCase(), hash],
   );
-  console.log('[admin] admin user upserted');
+  console.log('[admin] admin user seeded');
 }
 
 // ---------------------------------------------------------------------------
@@ -137,6 +142,75 @@ app.post('/api/auth/login', async (req, res, next) => {
     }
     const token = jwt.sign({ email: rows[0].email }, JWT_SECRET, { expiresIn: '7d' });
     return res.json({ token, email: rows[0].email });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+app.put('/api/auth/credentials', requireAuth, async (req, res, next) => {
+  try {
+    const jwtEmail =
+      typeof req.user?.email === 'string' ? req.user.email.toLowerCase() : '';
+    if (!jwtEmail) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+
+    const { currentPassword, newEmail, newPassword } = req.body || {};
+    if (typeof currentPassword !== 'string' || currentPassword === '') {
+      return res.status(400).json({ error: 'bad_request', message: 'current_password_required' });
+    }
+    const wantsEmail = newEmail !== undefined && newEmail !== null && newEmail !== '';
+    const wantsPassword = newPassword !== undefined && newPassword !== null && newPassword !== '';
+    if (!wantsEmail && !wantsPassword) {
+      return res.status(400).json({ error: 'bad_request', message: 'nothing_to_update' });
+    }
+    if (wantsPassword && (typeof newPassword !== 'string' || newPassword.length < 8)) {
+      return res.status(400).json({ error: 'bad_request', message: 'password_too_short' });
+    }
+    if (wantsEmail && (typeof newEmail !== 'string' || !/.+@.+\..+/.test(newEmail))) {
+      return res.status(400).json({ error: 'bad_request', message: 'invalid_email' });
+    }
+
+    const { rows } = await pool.query(
+      'SELECT email, password_hash FROM admins WHERE email = $1',
+      [jwtEmail],
+    );
+    if (rows.length === 0) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+    const ok = await bcrypt.compare(currentPassword, rows[0].password_hash);
+    if (!ok) {
+      return res.status(403).json({ error: 'wrong_password' });
+    }
+
+    const finalEmail = wantsEmail ? newEmail.toLowerCase() : rows[0].email;
+    const sets = [];
+    const params = [];
+    if (wantsPassword) {
+      const hash = await bcrypt.hash(newPassword, 10);
+      params.push(hash);
+      sets.push(`password_hash = $${params.length}`);
+    }
+    if (wantsEmail) {
+      params.push(finalEmail);
+      sets.push(`email = $${params.length}`);
+    }
+    params.push(jwtEmail);
+    try {
+      await pool.query(
+        `UPDATE admins SET ${sets.join(', ')} WHERE email = $${params.length}`,
+        params,
+      );
+    } catch (err) {
+      if (err && err.code === '23505') {
+        // unique_violation: the new email already belongs to another admin
+        return res.status(400).json({ error: 'bad_request', message: 'email_taken' });
+      }
+      throw err;
+    }
+
+    const token = jwt.sign({ email: finalEmail }, JWT_SECRET, { expiresIn: '7d' });
+    return res.json({ token, email: finalEmail });
   } catch (err) {
     return next(err);
   }

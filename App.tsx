@@ -15,14 +15,14 @@ import Dashboard from './components/admin/Dashboard';
 import { Section, AppView, Testimonial, Video, CareerMoment, Article, GalleryImage } from './types';
 import { StorageService } from './services/storage';
 import { SOCIAL_ARTICLES } from './socialArticles';
-import { Loader2, AlertTriangle, Copy, Check, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 const App: React.FC = () => {
   const [activeSection, setActiveSection] = useState<Section>(Section.HOME);
   const [currentView, setCurrentView] = useState<AppView>('home');
   const [isAuthenticated, setIsAuthenticated] = useState(() => !!StorageService.getCurrentUser());
   const [isLoading, setIsLoading] = useState(true);
-  const [permissionError, setPermissionError] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
   
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
@@ -36,10 +36,11 @@ const App: React.FC = () => {
       const loadData = async () => {
           setIsLoading(true);
           try {
-              // Test connection first to fail fast on permission error
+              // Test connection first to fail fast if the API/database is unreachable
               const connectionTest = await StorageService.testConnection();
-              if (!connectionTest.success && connectionTest.message === 'permission-denied') {
-                  setPermissionError(true);
+              if (!connectionTest.success) {
+                  console.error("Connection test failed:", connectionTest.message);
+                  setConnectionError(true);
                   setIsLoading(false);
                   return;
               }
@@ -62,20 +63,23 @@ const App: React.FC = () => {
               setGallery(gData);
               setHeroImage(hImg);
 
-              // One-time sync for social articles if missing
+              // One-time sync for social articles if missing.
+              // Non-fatal: persisting requires an authenticated admin session, so for
+              // anonymous visitors we still merge the bundled articles into local state.
               if (aData.length < 5) { // Assuming if there are very few articles, we need the bulk upload
                   const hasSocial = aData.some(a => a.id.startsWith('social-art-'));
                   if (!hasSocial) {
-                      console.log("Syncing social articles...");
-                      await StorageService.saveArticles([...SOCIAL_ARTICLES, ...aData]);
                       setArticles([...SOCIAL_ARTICLES, ...aData]);
+                      try {
+                          await StorageService.saveArticles([...SOCIAL_ARTICLES, ...aData]);
+                      } catch (syncErr) {
+                          console.warn("Social articles sync skipped (requires admin session):", syncErr);
+                      }
                   }
               }
-          } catch (e: any) {
+          } catch (e) {
               console.error("Failed to load data", e);
-              if (e.code === 'permission-denied' || e.message?.includes('permission') || e.message?.includes('Missing or insufficient permissions')) {
-                  setPermissionError(true);
-              }
+              setConnectionError(true);
           } finally {
               setIsLoading(false);
           }
@@ -197,61 +201,27 @@ const App: React.FC = () => {
   };
 
   // --------------------------------------------------------------------------
-  // PERMISSION ERROR HELP SCREEN
+  // CONNECTION ERROR SCREEN
   // --------------------------------------------------------------------------
-  if (permissionError) {
-      const rulesCode = `rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
-    }
-  }
-}`;
+  if (connectionError) {
       return (
           <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4" dir="rtl">
-              <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden">
-                  <div className="bg-red-600 p-6 text-white flex items-center gap-4">
-                      <AlertTriangle size={40} />
-                      <div>
-                          <h1 className="text-2xl font-bold">تنبيه: قاعدة البيانات مغلقة!</h1>
-                          <p className="opacity-90">الموقع لا يستطيع جلب أو حفظ البيانات بسبب إعدادات الأمان في Firebase.</p>
-                      </div>
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden text-center">
+                  <div className="bg-red-600 p-6 text-white flex items-center justify-center gap-3">
+                      <AlertTriangle size={32} />
+                      <h1 className="text-xl font-bold">تعذر الاتصال بالخادم</h1>
                   </div>
-                  
                   <div className="p-8 space-y-6">
-                      <p className="text-slate-700 text-lg">
-                          لا تقلق، هذا طبيعي عند إنشاء مشروع جديد. القواعد الافتراضية تمنع أي شخص من القراءة أو الكتابة. لحل المشكلة، اتبع الخطوات التالية:
+                      <p className="text-slate-700 leading-relaxed">
+                          نواجه صعوبة مؤقتة في جلب بيانات الموقع. يرجى التحقق من اتصالك بالإنترنت ثم إعادة المحاولة بعد قليل.
                       </p>
-                      
-                      <ol className="list-decimal list-inside space-y-3 text-slate-800 font-medium bg-gray-50 p-6 rounded-xl border border-gray-200">
-                          <li>اذهب إلى <strong>Firebase Console</strong>.</li>
-                          <li>اختر مشروعك <strong>gameelazzadeen</strong>.</li>
-                          <li>من القائمة الجانبية اختر <strong>Firestore Database</strong>.</li>
-                          <li>اختر التبويب <strong>Rules</strong> (القواعد).</li>
-                          <li>امسح الكود الموجود وضع الكود التالي بدلاً منه:</li>
-                      </ol>
-
-                      <div className="relative bg-slate-800 rounded-lg p-4 font-mono text-sm text-green-400 overflow-x-auto" dir="ltr">
-                          <button 
-                              onClick={() => {navigator.clipboard.writeText(rulesCode); alert('تم النسخ!');}}
-                              className="absolute top-2 right-2 bg-white/10 hover:bg-white/20 text-white p-2 rounded transition-colors"
-                              title="نسخ الكود"
-                          >
-                              <Copy size={16} />
-                          </button>
-                          <pre>{rulesCode}</pre>
-                      </div>
-
-                      <div className="flex justify-end gap-3 pt-4">
-                          <button 
-                              onClick={() => window.location.reload()} 
-                              className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2"
-                          >
-                              <RefreshCw size={18} />
-                              لقد قمت بتحديث القواعد، أعد التحميل
-                          </button>
-                      </div>
+                      <button
+                          onClick={() => window.location.reload()}
+                          className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-lg font-bold inline-flex items-center gap-2 transition-colors"
+                      >
+                          <RefreshCw size={18} />
+                          إعادة المحاولة
+                      </button>
                   </div>
               </div>
           </div>

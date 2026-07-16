@@ -131,6 +131,24 @@ export const StorageService = {
       return session ? { email: session.email } : null;
   },
 
+  changeCredentials: async (currentPassword: string, newEmail?: string, newPassword?: string): Promise<{ email: string }> => {
+      const res = await apiFetch('/auth/credentials', {
+          method: 'PUT',
+          body: JSON.stringify({ currentPassword, newEmail, newPassword }),
+      });
+      if (res.status === 401) throw new Error('unauthorized');
+      if (res.status === 403) throw new Error('wrong_password');
+      if (res.status === 400) {
+          const body = await res.json().catch(() => ({} as { message?: string }));
+          throw new Error(body.message === 'email_taken' ? 'email_taken' : 'bad_request');
+      }
+      if (!res.ok) throw new Error(`credentials_update_failed_${res.status}`);
+      const data = await res.json();
+      const session: AuthSession = { token: data.token, email: data.email };
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+      return { email: session.email };
+  },
+
   isOnline: (): boolean => true,
 
   // --- الصورة الشخصية ---

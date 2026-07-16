@@ -46,8 +46,11 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                         <label className="block text-gray-300 mb-2 text-sm font-bold">البريد الإلكتروني</label>
                         <div className="relative">
                             <Mail className="absolute right-3 top-3 text-gray-500" size={20} />
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
+                                name="email"
+                                autoComplete="email"
+                                autoFocus
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 className="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-10 text-white focus:outline-none focus:border-gold-500 transition-colors"
@@ -61,8 +64,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                         <label className="block text-gray-300 mb-2 text-sm font-bold">كلمة المرور</label>
                         <div className="relative">
                             <Lock className="absolute right-3 top-3 text-gray-500" size={20} />
-                            <input 
-                                type="password" 
+                            <input
+                                type="password"
+                                name="password"
+                                autoComplete="current-password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="w-full bg-slate-900 border border-slate-600 rounded-lg py-3 px-10 text-white focus:outline-none focus:border-gold-500 transition-colors"
