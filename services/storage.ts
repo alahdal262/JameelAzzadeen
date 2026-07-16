@@ -1,57 +1,66 @@
 
 import { Testimonial, Video, CareerMoment, Article, GalleryImage } from '../types';
-// @ts-ignore
-import { initializeApp } from 'firebase/app';
-import { 
-    getFirestore, 
-    collection, 
-    getDocs, 
-    doc, 
-    setDoc, 
-    deleteDoc, 
-    query, 
-    orderBy, 
-    getDoc
-} from 'firebase/firestore';
-import { getAuth, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
 
 // ---------------------------------------------------------
-// بيانات الاتصال بقاعدة البيانات (Firebase)
+// خدمة التخزين — REST API ذاتية الاستضافة (نفس الأصل /api)
 // ---------------------------------------------------------
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyA_L0XyjlLOeavYYuKIHddwD23PepZPtuQ",
-  authDomain: "gameelazzadeen.firebaseapp.com",
-  projectId: "gameelazzadeen",
-  storageBucket: "gameelazzadeen.firebasestorage.app",
-  messagingSenderId: "1074091818654",
-  appId: "1:1074091818654:web:114c8a4d55f5ce36c5c58f",
-  measurementId: "G-SPEN12CYTF"
-};
 
 export const DEFAULT_HERO_IMAGE = "https://gamilazzdeen.com/wp-content/uploads/2025/12/gamil.png";
 
-// تهيئة Firebase
-let db: any;
-let auth: any;
+const AUTH_STORAGE_KEY = 'jameel_auth';
 
-try {
-    const app = initializeApp(FIREBASE_CONFIG);
-    // ⚠️ تم إزالة التخزين المؤقت (Persistence) نهائياً
-    // الآن الاتصال مباشر: إذا لم يكن هناك إنترنت أو صلاحية، ستفشل العملية فوراً.
-    db = getFirestore(app);
-    
-    // محاولة تهيئة Auth بشكل منفصل لتجنب تعطل التطبيق بالكامل إذا فشلت
-    try {
-        auth = getAuth(app);
-        console.log("✅ Firebase Auth Initialized");
-    } catch (authError) {
-        console.warn("⚠️ Failed to initialize Firebase Auth (Check imports in index.html):", authError);
-    }
-    
-    console.log("✅ Connected to Firebase (Direct Mode)");
-} catch (error) {
-    console.error("❌ Failed to initialize Firebase:", error);
+interface AuthSession {
+    token: string;
+    email: string;
 }
+
+const getSession = (): AuthSession | null => {
+    try {
+        const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.token === 'string' && typeof parsed.email === 'string') {
+            return parsed as AuthSession;
+        }
+        return null;
+    } catch {
+        return null;
+    }
+};
+
+const apiFetch = async (path: string, options: RequestInit = {}): Promise<Response> => {
+    const session = getSession();
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
+        ...(options.headers as Record<string, string> | undefined),
+    };
+    return fetch(`/api${path}`, { ...options, headers });
+};
+
+// --- Generic collection helpers (whitelisted server-side) ---
+const getCollection = async <T>(name: string): Promise<T[]> => {
+    const res = await apiFetch(`/collections/${name}`);
+    if (!res.ok) throw new Error(`Failed to fetch ${name} (${res.status})`);
+    const data = await res.json();
+    return (data.items || []) as T[];
+};
+
+const saveCollection = async (name: string, items: unknown[]): Promise<boolean> => {
+    const res = await apiFetch(`/collections/${name}`, {
+        method: 'PUT',
+        body: JSON.stringify({ items }),
+    });
+    if (!res.ok) throw new Error(`Failed to save ${name} (${res.status})`);
+    return true;
+};
+
+const deleteFromCollection = async (name: string, id: string | number): Promise<void> => {
+    const res = await apiFetch(`/collections/${name}/${encodeURIComponent(String(id))}`, {
+        method: 'DELETE',
+    });
+    if (!res.ok) throw new Error(`Failed to delete from ${name} (${res.status})`);
+};
 
 // ---------------------------------------------------------
 // دوال المساعدة لجلب الفيديوهات من يوتيوب
@@ -82,108 +91,101 @@ const fetchVideosFromRSS = async (channelId: string): Promise<Video[]> => {
     }
 };
 
-// ---------------------------------------------------------
-// خدمة التخزين (أونلاين فقط - بدون ذاكرة مؤقتة)
-// ---------------------------------------------------------
 export const StorageService = {
-  
-  // فحص الاتصال واختبار الكتابة
+
+  // فحص الاتصال بالخادم وقاعدة البيانات
   testConnection: async (): Promise<{success: boolean, message: string}> => {
-      if (!db) return { success: false, message: "Firebase SDK not initialized" };
       try {
-          // محاولة قراءة بسيطة (Ping)
-           await getDoc(doc(db, 'system', 'ping'));
-          return { success: true, message: "الاتصال ناجح" };
+          const res = await apiFetch('/health');
+          if (!res.ok) return { success: false, message: `خطأ في الخادم (${res.status})` };
+          const data = await res.json();
+          if (data.ok && data.db) return { success: true, message: "الاتصال ناجح" };
+          if (data.ok && !data.db) return { success: false, message: "قاعدة البيانات غير متصلة" };
+          return { success: false, message: "الخادم غير جاهز" };
       } catch (e: any) {
           console.error("Connection test failed:", e);
-          if (e.code === 'permission-denied' || e.message?.includes('permission') || e.message?.includes('Missing or insufficient permissions')) {
-              console.error(`
-              %c⚠️ تنبيه هام: قاعدة البيانات مغلقة! ⚠️
-              يرجى الذهاب إلى Firebase Console > Firestore Database > Rules
-              وتغيير القواعد إلى: allow read, write: if true;
-              `, "color: red; font-weight: bold; font-size: 14px;");
-              return { success: false, message: "permission-denied" };
-          }
-          return { success: false, message: `خطأ غير متوقع: ${e.message}` };
+          return { success: false, message: `تعذر الاتصال بالخادم: ${e.message}` };
       }
   },
 
   // Authentication Methods
   login: async (email: string, pass: string) => {
-      if (!auth) throw new Error("Auth not initialized (Check Console Logs)");
-      return signInWithEmailAndPassword(auth, email, pass);
+      const res = await apiFetch('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email, password: pass }),
+      });
+      if (res.status === 401) throw new Error('invalid_credentials');
+      if (!res.ok) throw new Error(`login_failed_${res.status}`);
+      const data = await res.json();
+      const session: AuthSession = { token: data.token, email: data.email };
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+      return session;
   },
 
   logout: async () => {
-      if (!auth) return;
-      return signOut(auth);
+      localStorage.removeItem(AUTH_STORAGE_KEY);
   },
 
-  getCurrentUser: (): User | null => {
-      return auth?.currentUser || null;
+  getCurrentUser: (): { email: string } | null => {
+      const session = getSession();
+      return session ? { email: session.email } : null;
   },
 
-  isOnline: (): boolean => !!db,
+  isOnline: (): boolean => true,
 
   // --- الصورة الشخصية ---
   getHeroImage: async (): Promise<string> => {
-      if (!db) return DEFAULT_HERO_IMAGE;
       try {
-          const docRef = doc(db, 'settings', 'hero_image');
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) return docSnap.data().url;
-      } catch (e) { console.error("Error getting hero image:", e); throw e; }
-      return DEFAULT_HERO_IMAGE;
+          const res = await apiFetch('/settings/hero_image');
+          if (!res.ok) return DEFAULT_HERO_IMAGE;
+          const data = await res.json();
+          return data.value?.url || DEFAULT_HERO_IMAGE;
+      } catch (e) {
+          console.error("Error getting hero image:", e);
+          return DEFAULT_HERO_IMAGE;
+      }
   },
 
   saveHeroImage: async (url: string): Promise<void> => {
-      if (!db) throw new Error("لا يوجد اتصال بقاعدة البيانات");
-      await setDoc(doc(db, 'settings', 'hero_image'), { url }, { merge: true });
+      const res = await apiFetch('/settings/hero_image', {
+          method: 'PUT',
+          body: JSON.stringify({ value: { url } }),
+      });
+      if (!res.ok) throw new Error(`Failed to save hero image (${res.status})`);
   },
 
   // --- معرف القناة ---
   getChannelId: async (): Promise<string> => {
-      if (!db) return '';
       try {
-          const docRef = doc(db, 'settings', 'general');
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) return docSnap.data().channelId || '';
-      } catch (e) { console.error("Error getting channel ID:", e); throw e; }
-      return '';
+          const res = await apiFetch('/settings/general');
+          if (!res.ok) return '';
+          const data = await res.json();
+          return data.value?.channelId || '';
+      } catch (e) {
+          console.error("Error getting channel ID:", e);
+          return '';
+      }
   },
 
   saveChannelId: async (channelId: string): Promise<void> => {
-      if (!db) throw new Error("لا يوجد اتصال بقاعدة البيانات");
-      await setDoc(doc(db, 'settings', 'general'), { channelId }, { merge: true });
+      const res = await apiFetch('/settings/general', {
+          method: 'PUT',
+          body: JSON.stringify({ value: { channelId } }),
+      });
+      if (!res.ok) throw new Error(`Failed to save channel ID (${res.status})`);
   },
 
   // --- الآراء (Testimonials) ---
   getTestimonials: async (): Promise<Testimonial[]> => {
-    if (!db) return [];
-    try {
-      const q = query(collection(db, 'testimonials'), orderBy('id', 'desc'));
-      const querySnapshot = await getDocs(q);
-      const items: Testimonial[] = [];
-      querySnapshot.forEach((doc) => items.push(doc.data() as Testimonial));
-      return items;
-    } catch (error) {
-      console.error("Error fetching testimonials:", error);
-      throw error;
-    }
+      return getCollection<Testimonial>('testimonials');
   },
 
   saveTestimonials: async (items: Testimonial[]): Promise<boolean> => {
-    if (!db) throw new Error("لا يوجد اتصال بقاعدة البيانات");
-    // Save items individually
-    for (const item of items) {
-        await setDoc(doc(db, 'testimonials', String(item.id)), item);
-    }
-    return true;
+      return saveCollection('testimonials', items);
   },
 
   deleteTestimonial: async (id: string | number): Promise<void> => {
-      if (!db) throw new Error("لا يوجد اتصال بقاعدة البيانات");
-      await deleteDoc(doc(db, 'testimonials', String(id)));
+      return deleteFromCollection('testimonials', id);
   },
 
   // --- الفيديوهات ---
@@ -196,113 +198,53 @@ export const StorageService = {
     }
 
     // ثم محاولة جلب الفيديوهات اليدوية من قاعدة البيانات
-    if (!db) return [];
-    try {
-      const q = query(collection(db, 'videos'), orderBy('date', 'desc'));
-      const querySnapshot = await getDocs(q);
-      const items: Video[] = [];
-      querySnapshot.forEach((doc) => items.push(doc.data() as Video));
-      return items;
-    } catch (error) {
-      console.error("Error fetching videos:", error);
-      throw error;
-    }
+    return getCollection<Video>('videos');
   },
 
   saveVideos: async (items: Video[]): Promise<boolean> => {
-    if (!db) throw new Error("لا يوجد اتصال بقاعدة البيانات");
-    for (const item of items) {
-        await setDoc(doc(db, 'videos', item.id), item);
-    }
-    return true;
+      return saveCollection('videos', items);
   },
 
   deleteVideo: async (id: string): Promise<void> => {
-    if (!db) throw new Error("لا يوجد اتصال بقاعدة البيانات");
-    await deleteDoc(doc(db, 'videos', id));
+      return deleteFromCollection('videos', id);
   },
 
   // --- السيرة (Career Moments) ---
   getCareerMoments: async (): Promise<CareerMoment[]> => {
-    if (!db) return [];
-    try {
-        const q = query(collection(db, 'career_moments'), orderBy('id', 'desc'));
-        const querySnapshot = await getDocs(q);
-        const items: CareerMoment[] = [];
-        querySnapshot.forEach((doc) => items.push(doc.data() as CareerMoment));
-        return items;
-    } catch(e) { 
-        console.error("Error fetching moments:", e);
-        throw e;
-    }
+      return getCollection<CareerMoment>('career_moments');
   },
 
   saveCareerMoments: async (items: CareerMoment[]): Promise<boolean> => {
-      if (!db) throw new Error("لا يوجد اتصال بقاعدة البيانات");
-      for (const item of items) {
-          await setDoc(doc(db, 'career_moments', String(item.id)), item);
-      }
-      return true;
+      return saveCollection('career_moments', items);
   },
 
   deleteCareerMoment: async (id: string | number): Promise<void> => {
-      if (!db) throw new Error("لا يوجد اتصال بقاعدة البيانات");
-      await deleteDoc(doc(db, 'career_moments', String(id)));
+      return deleteFromCollection('career_moments', id);
   },
 
   // --- المقالات ---
   getArticles: async (): Promise<Article[]> => {
-    if (!db) return [];
-    try {
-        const q = query(collection(db, 'articles'), orderBy('id', 'desc'));
-        const querySnapshot = await getDocs(q);
-        const items: Article[] = [];
-        querySnapshot.forEach((doc) => items.push(doc.data() as Article));
-        return items;
-    } catch(e) {
-        console.error("Error fetching articles:", e);
-        throw e;
-    }
+      return getCollection<Article>('articles');
   },
 
   saveArticles: async (items: Article[]): Promise<boolean> => {
-      if (!db) throw new Error("لا يوجد اتصال بقاعدة البيانات");
-      for (const item of items) {
-          await setDoc(doc(db, 'articles', String(item.id)), item);
-      }
-      return true;
+      return saveCollection('articles', items);
   },
 
   deleteArticle: async (id: string): Promise<void> => {
-      if (!db) throw new Error("لا يوجد اتصال بقاعدة البيانات");
-      await deleteDoc(doc(db, 'articles', id));
+      return deleteFromCollection('articles', id);
   },
 
   // --- المعرض ---
   getGallery: async (): Promise<GalleryImage[]> => {
-    if (!db) return [];
-    try {
-        const q = query(collection(db, 'gallery'), orderBy('id', 'desc'));
-        const querySnapshot = await getDocs(q);
-        const items: GalleryImage[] = [];
-        querySnapshot.forEach((doc) => items.push(doc.data() as GalleryImage));
-        return items;
-    } catch(e) {
-        console.error("Error fetching gallery:", e);
-        throw e;
-    }
+      return getCollection<GalleryImage>('gallery');
   },
 
   saveGallery: async (items: GalleryImage[]): Promise<boolean> => {
-      if (!db) throw new Error("لا يوجد اتصال بقاعدة البيانات");
-      for (const item of items) {
-          await setDoc(doc(db, 'gallery', String(item.id)), item);
-      }
-      return true;
+      return saveCollection('gallery', items);
   },
 
   deleteGalleryImage: async (id: string | number): Promise<void> => {
-      if (!db) throw new Error("لا يوجد اتصال بقاعدة البيانات");
-      await deleteDoc(doc(db, 'gallery', String(id)));
+      return deleteFromCollection('gallery', id);
   }
 };

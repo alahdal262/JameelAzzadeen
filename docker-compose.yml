@@ -1,0 +1,36 @@
+services:
+  web:
+    build:
+      context: .
+      args:
+        GEMINI_API_KEY: ${GEMINI_API_KEY}
+    environment:
+      DATABASE_URL: postgresql://jameel:${DB_PASSWORD}@db:5432/jameel
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      PORT: 4000
+    ports:
+      - "127.0.0.1:${HOST_PORT:-3203}:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: jameel
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: jameel
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jameel"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  pgdata:

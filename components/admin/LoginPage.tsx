@@ -18,24 +18,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         setError('');
         setIsLoading(true);
 
-        // Fallback for demo/dev if needed, but primary is real auth
-        if (email === 'admin' && password === 'admin123') {
-            onLogin(true);
-            setIsLoading(false);
-            return;
-        }
-
         try {
             await StorageService.login(email, password);
             onLogin(true);
         } catch (err: any) {
             console.error("Login failed", err);
-            if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+            if (err.message === 'invalid_credentials') {
                 setError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
-            } else if (err.code === 'auth/too-many-requests') {
-                setError('محاولات كثيرة خاطئة. يرجى الانتظار قليلاً.');
             } else {
-                setError('حدث خطأ في تسجيل الدخول: ' + err.message);
+                setError('حدث خطأ في تسجيل الدخول. يرجى المحاولة مرة أخرى.');
             }
         } finally {
             setIsLoading(false);
@@ -96,10 +87,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                         {isLoading && <Loader2 className="animate-spin" size={20} />}
                         {isLoading ? 'جاري التحقق...' : 'دخول'}
                     </button>
-                    
-                    <div className="text-center text-xs text-gray-500 mt-4">
-                        تأكد من تفعيل Email/Password في Firebase Console
-                    </div>
                 </form>
             </div>
         </div>

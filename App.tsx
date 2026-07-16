@@ -20,7 +20,7 @@ import { Loader2, AlertTriangle, Copy, Check, RefreshCw } from 'lucide-react';
 const App: React.FC = () => {
   const [activeSection, setActiveSection] = useState<Section>(Section.HOME);
   const [currentView, setCurrentView] = useState<AppView>('home');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!StorageService.getCurrentUser());
   const [isLoading, setIsLoading] = useState(true);
   const [permissionError, setPermissionError] = useState(false);
   
