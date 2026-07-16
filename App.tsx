@@ -89,10 +89,12 @@ const App: React.FC = () => {
       const path = window.location.pathname;
       const hash = window.location.hash;
       
-      if (path === '/login' || hash === '#login') {
-        setCurrentView('login');
-      } else if (hash === '#dashboard') {
+      // #dashboard must win over the /login path — otherwise a successful
+      // login at /login re-routes back to the login view forever.
+      if (hash === '#dashboard') {
         setCurrentView('dashboard');
+      } else if (path === '/login' || hash === '#login') {
+        setCurrentView('login');
       } else if (hash === '#articles') {
         setCurrentView('articles');
       } else {
@@ -182,7 +184,8 @@ const App: React.FC = () => {
   const handleLogin = (success: boolean) => {
       if (success) {
           setIsAuthenticated(true);
-          window.location.hash = '#dashboard';
+          // normalize away a possible /login path so routing lands on the dashboard
+          window.history.replaceState(null, '', '/#dashboard');
           setCurrentView('dashboard');
       }
   };
