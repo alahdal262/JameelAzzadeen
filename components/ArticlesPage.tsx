@@ -19,10 +19,10 @@ const QUOTES_CATEGORY = 'ماذا قيل عنه';
 interface ArticlesPageProps {
     onBack: () => void;
     articles: Article[];
-    /** Article id from the /articles/<id> route — the modal is URL-driven. */
-    openArticleId?: string;
-    /** Pushes /articles/<id> (history) — App owns the URL. */
-    onOpenArticle: (articleId: string) => void;
+    /** Slug (or legacy id) from the /articles/<key> route — the modal is URL-driven. */
+    openArticleKey?: string;
+    /** Pushes /articles/<slug> (history) — App owns the URL. */
+    onOpenArticle: (articleKey: string) => void;
     /** Returns to /articles (history.back if we pushed, else pushState). */
     onCloseArticle: () => void;
 }
@@ -125,11 +125,12 @@ const SocialPostArticle: React.FC<{ post: SocialPost; reverse?: boolean }> = ({ 
     );
 };
 
-const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles, openArticleId, onOpenArticle, onCloseArticle }) => {
-    // The open article is derived from the URL (/articles/<id>). An unknown id
-    // simply renders the list with the modal closed — no crash.
-    const selectedArticle: Article | null = openArticleId
-        ? articles.find(a => a.id === openArticleId) ?? null
+const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles, openArticleKey, onOpenArticle, onCloseArticle }) => {
+    // The open article is derived from the URL (/articles/<key>): slug match
+    // first, then legacy id. An unknown key simply renders the list with the
+    // modal closed — no crash.
+    const selectedArticle: Article | null = openArticleKey
+        ? articles.find(a => a.slug === openArticleKey) ?? articles.find(a => a.id === openArticleKey) ?? null
         : null;
     const modalContentRef = useRef<HTMLDivElement>(null);
 
@@ -165,8 +166,8 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles, openArtic
     const handleShare = async () => {
         if (!selectedArticle) return;
 
-        // Full canonical article URL (deep link to /articles/<id>).
-        const articleUrl = `${window.location.origin}/articles/${selectedArticle.id}`;
+        // Full canonical article URL (deep link to /articles/<slug>).
+        const articleUrl = `${window.location.origin}/articles/${selectedArticle.slug || selectedArticle.id}`;
 
         const shareData = {
             title: selectedArticle.title,
@@ -261,7 +262,7 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles, openArtic
                                                     {article.excerpt}
                                                 </p>
                                                 <button
-                                                    onClick={() => onOpenArticle(article.id)}
+                                                    onClick={() => onOpenArticle(article.slug || article.id)}
                                                     className="mt-auto flex items-center justify-between w-full p-4 bg-slate-50 rounded-xl text-slate-700 font-bold text-sm group-hover:bg-gold-500 group-hover:text-white transition-all"
                                                 >
                                                     <span>قراءة التفاصيل</span> 
@@ -333,7 +334,7 @@ const ArticlesPage: React.FC<ArticlesPageProps> = ({ onBack, articles, openArtic
                                                     </div>
                                                     
                                                     <button
-                                                        onClick={() => onOpenArticle(article.id)}
+                                                        onClick={() => onOpenArticle(article.slug || article.id)}
                                                         className="mt-auto flex items-center gap-2 text-gold-500 text-sm font-bold w-fit py-2 hover:text-gold-400 transition-all"
                                                     >
                                                         قراءة المزيد <ChevronLeft size={16} />

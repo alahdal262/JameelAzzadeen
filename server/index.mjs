@@ -354,6 +354,41 @@ app.use((req, res, next) => {
   return next();
 });
 
+// --- Legacy article id URLs -> 301 slug URLs -----------------------------------
+
+// /articles/<id> permanently redirects to /articles/<slug> when the key matches
+// a stored article id whose slug differs. Slug URLs (and anything ambiguous or
+// unknown) fall through to the SPA. A DB hiccup must not break the page — it
+// also falls through.
+app.use(async (req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  let decoded;
+  try {
+    decoded = decodeURIComponent(req.path);
+  } catch {
+    return next();
+  }
+  const match = /^\/articles\/([^/]+)$/.exec(decoded);
+  if (!match) return next();
+  const key = match[1];
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, data->>'slug' AS slug FROM items
+       WHERE collection = 'articles' AND (id = $1 OR data->>'slug' = $1)`,
+      [key],
+    );
+    // The key already being some article's slug wins over an id match.
+    if (rows.some((r) => r.slug === key)) return next();
+    const byId = rows.find((r) => r.id === key);
+    if (byId && byId.slug && byId.slug !== key) {
+      return res.redirect(301, `/articles/${encodeURIComponent(byId.slug)}`);
+    }
+  } catch (err) {
+    console.warn(`[articles] slug redirect lookup failed: ${err.message}`);
+  }
+  return next();
+});
+
 // --- Static SPA ---------------------------------------------------------------
 
 // Hashed assets are immutable — cache for a year. HTML must always revalidate

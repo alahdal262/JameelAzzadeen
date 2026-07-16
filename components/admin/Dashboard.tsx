@@ -4,6 +4,7 @@ import { Testimonial, Video, CareerMoment, Article, GalleryImage } from '../../t
 import { Trash2, Plus, Image as ImageIcon, Type, LogOut, LayoutDashboard, Video as VideoIcon, Quote, Loader2, Sparkles, Cloud, Save, Youtube, RefreshCw, UserCheck, Newspaper, Pencil, Link2, Wand2, Images, UploadCloud, User, Settings, Download, Upload, Database, AlertCircle, CheckCircle2, XCircle, KeyRound } from 'lucide-react';
 import { analyzeImageForTestimonial, expandArticleContent } from '../../services/geminiService';
 import { StorageService } from '../../services/storage';
+import { ensureArticleSlug } from '../../services/slug';
 
 interface DashboardProps {
     testimonials: Testimonial[];
@@ -521,11 +522,14 @@ const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMomen
                     if (art.id === editingArticleId) {
                         return {
                             ...art,
+                            // Existing slug is kept (shared links); generated only for
+                            // legacy articles saved before slugs existed.
+                            slug: ensureArticleSlug({ ...art, title: articleTitle }, articles),
                             title: articleTitle,
                             category: articleCategory,
                             excerpt: articleExcerpt,
                             content: formattedContent,
-                            image: articleImage || art.image, 
+                            image: articleImage || art.image,
                         };
                     }
                     return art;
@@ -533,10 +537,10 @@ const Dashboard: React.FC<DashboardProps> = ({ testimonials, videos, careerMomen
                 await onUpdateArticles(updatedArticles);
                 alert('تم تعديل المقال في السيرفر بنجاح!');
             } else {
-                const slug = articleTitle.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^\w\u0600-\u06FF-]/g, '');
+                const id = String(Date.now());
                 const newArticle: Article = {
-                    id: String(Date.now()),
-                    slug: slug,
+                    id,
+                    slug: ensureArticleSlug({ id, title: articleTitle }, articles),
                     title: articleTitle,
                     category: articleCategory,
                     excerpt: articleExcerpt,
