@@ -7,6 +7,7 @@ import express from 'express';
 import pg from 'pg';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { renderArticleHtml } from './seo.mjs';
 
 const { Pool } = pg;
 
@@ -26,6 +27,10 @@ const ALLOWED_COLLECTIONS = new Set([
 
 const DIST_DIR = path.resolve(process.cwd(), 'dist');
 const INDEX_HTML = path.join(DIST_DIR, 'index.html');
+// Public origin used to build absolute canonical/og:url/og:image values in
+// server-rendered meta tags. Trailing slashes are stripped so concatenation
+// with a leading-slash path never produces "//".
+const PUBLIC_ORIGIN = (process.env.PUBLIC_ORIGIN || 'https://gamilazzdeen.com').replace(/\/+$/, '');
 
 // ---------------------------------------------------------------------------
 // Database
@@ -354,6 +359,67 @@ app.use((req, res, next) => {
   return next();
 });
 
+// --- Article OG/SEO meta injection ---------------------------------------------
+
+// The built dist/index.html is read once at boot (it only changes on deploy,
+// which restarts the container) and kept in memory. Rendering is a pure string
+// transform per request — no shared mutable state, so concurrent requests are
+// safe. If the template is missing at boot, article pages simply fall through
+// to the plain SPA behavior.
+let indexTemplate = null;
+
+function loadIndexTemplate() {
+  try {
+    indexTemplate = fs.readFileSync(INDEX_HTML, 'utf8');
+    console.log('[seo] index.html template cached for meta injection');
+  } catch (err) {
+    indexTemplate = null;
+    console.warn(`[seo] could not read ${INDEX_HTML}: ${err.message}; meta injection disabled`);
+  }
+}
+
+// --- Legacy article id URLs -> 301 slug URLs -----------------------------------
+
+// /articles/<id> permanently redirects to /articles/<slug> when the key matches
+// a stored article id whose slug differs. A slug match serves the SPA template
+// with article-specific OG/SEO meta injected. Anything ambiguous or unknown
+// falls through to the SPA, and a DB hiccup must not break the page — it also
+// falls through.
+app.use(async (req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  let decoded;
+  try {
+    decoded = decodeURIComponent(req.path);
+  } catch {
+    return next();
+  }
+  const match = /^\/articles\/([^/]+)$/.exec(decoded);
+  if (!match) return next();
+  const key = match[1];
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, data FROM items
+       WHERE collection = 'articles' AND (id = $1 OR data->>'slug' = $1)`,
+      [key],
+    );
+    // The key already being some article's slug wins over an id match.
+    const bySlug = rows.find((r) => r.data && r.data.slug === key);
+    if (bySlug) {
+      if (!indexTemplate) return next();
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(200).send(renderArticleHtml(indexTemplate, bySlug.data, PUBLIC_ORIGIN));
+    }
+    const byId = rows.find((r) => r.id === key);
+    if (byId && byId.data && byId.data.slug && byId.data.slug !== key) {
+      return res.redirect(301, `/articles/${encodeURIComponent(byId.data.slug)}`);
+    }
+  } catch (err) {
+    console.warn(`[articles] slug lookup failed: ${err.message}`);
+  }
+  return next();
+});
+
 // --- Static SPA ---------------------------------------------------------------
 
 // Hashed assets are immutable — cache for a year. HTML must always revalidate
@@ -435,6 +501,7 @@ async function main() {
   if (!JWT_SECRET) {
     console.warn('[boot] JWT_SECRET is not set; auth tokens cannot be issued/verified securely');
   }
+  loadIndexTemplate();
   await connectWithRetry();
   await initSchema();
   await seedAdmin();

@@ -22,7 +22,9 @@ import { AlertTriangle, RefreshCw } from 'lucide-react';
 //   /                     home
 //   /<section>            home scrolled to section (about|gallery|videos|twitter|facebook|testimonials)
 //   /articles             blog page
-//   /articles/<id>        blog page with that article open
+//   /articles/<slug>      blog page with that article open (legacy /articles/<id>
+//                         still resolves; the server 301s it and the client
+//                         canonicalizes via replaceState as a fallback)
 //   /login                login (redirects to /dashboard when authenticated)
 //   /dashboard[/<tab>]    admin dashboard (tab slugs: testimonials|videos|about|gallery|articles|backup|account)
 //   anything else         404 view
@@ -59,7 +61,8 @@ const DEFAULT_TITLE = 'جميل عزالدين | الإعلامي والعميد
 interface RouteState {
   view: AppView;
   sectionSlug?: SectionSlug;
-  articleId?: string;
+  /** Second /articles segment — an article slug, or a legacy article id. */
+  articleKey?: string;
   dashboardTab?: string;
 }
 
@@ -99,7 +102,7 @@ const parseRoute = (rawPath: string): RouteState => {
   }
   if (first === 'articles') {
     if (segments.length === 1) return { view: 'articles' };
-    if (segments.length === 2 && second) return { view: 'articles', articleId: second };
+    if (segments.length === 2 && second) return { view: 'articles', articleKey: second };
     return { view: 'notfound' };
   }
   if (first === 'login' && segments.length === 1) return { view: 'login' };
@@ -293,7 +296,9 @@ const App: React.FC = () => {
         title = route.sectionSlug ? `جميل عزالدين | ${SECTION_TITLES[route.sectionSlug]}` : DEFAULT_TITLE;
         break;
       case 'articles': {
-        const article = route.articleId ? articles.find(a => a.id === route.articleId) : undefined;
+        const article = route.articleKey
+          ? articles.find(a => a.slug === route.articleKey) ?? articles.find(a => a.id === route.articleKey)
+          : undefined;
         title = article ? `جميل عزالدين | ${article.title}` : 'جميل عزالدين | المقالات';
         break;
       }
@@ -367,10 +372,23 @@ const App: React.FC = () => {
     }
   }, [navigate, navigateHome]);
 
-  const handleOpenArticle = useCallback((articleId: string) => {
+  const handleOpenArticle = useCallback((articleKey: string) => {
       pushedArticleRef.current = true;
-      navigate(`/articles/${articleId}`);
+      navigate(`/articles/${articleKey}`);
   }, [navigate]);
+
+  // Canonicalize legacy /articles/<id> deep links to the slug URL. This is the
+  // client-side fallback (dev server); production 301s at the Express layer.
+  useEffect(() => {
+      if (route.view !== 'articles' || !route.articleKey || articles.length === 0) return;
+      const bySlug = articles.find(a => a.slug === route.articleKey);
+      if (bySlug) return;
+      const byId = articles.find(a => a.id === route.articleKey);
+      if (byId?.slug) {
+          window.history.replaceState(null, '', `/articles/${byId.slug}`);
+          setRoute({ view: 'articles', articleKey: byId.slug });
+      }
+  }, [route, articles]);
 
   const handleCloseArticle = useCallback(() => {
       if (pushedArticleRef.current) {
@@ -512,7 +530,7 @@ const App: React.FC = () => {
             <ArticlesPage
                 articles={articles}
                 onBack={navigateHome}
-                openArticleId={route.articleId}
+                openArticleKey={route.articleKey}
                 onOpenArticle={handleOpenArticle}
                 onCloseArticle={handleCloseArticle}
             />

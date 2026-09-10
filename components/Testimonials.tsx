@@ -3,6 +3,7 @@ import React from 'react';
 import { Quote, MessageSquare, Sparkles } from 'lucide-react';
 import { Section, Testimonial } from '../types';
 import SocialPostsSlider from './SocialPostsSlider';
+import FeaturedTributes from './FeaturedTributes';
 
 export const INITIAL_TESTIMONIALS: Testimonial[] = [
     { id: 1, type: 'text', content: "جميل عزالدين ليس مجرد إعلامي، بل هو جبهة إعلامية بحد ذاته، كلماته رصاصات في صدور الأعداء.", author: "د. محمد العامري", role: "مستشار رئاسي" },
@@ -56,6 +57,9 @@ const Testimonials: React.FC<TestimonialsProps> = ({ items }) => {
             <div className="w-12 h-px bg-gold-500/40"></div>
           </div>
         </div>
+
+        {/* شهادات مختارة — نصوص كاملة بمصادرها، قبل شبكة الآراء القصيرة */}
+        <FeaturedTributes />
 
         {/* Testimonials masonry */}
         <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
